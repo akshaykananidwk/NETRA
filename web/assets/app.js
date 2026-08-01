@@ -70,6 +70,7 @@
             <span id="badge-mic" class="kn-badge" title="માઇક">🔴 માઇક</span>
             <span id="badge-ai" class="kn-badge" title="AI મોડેલ">🔴 AI</span>
             <span class="kn-badge opacity-40" title="WhatsApp — Phase 3">⚪ WhatsApp</span>
+            <span id="kn-voice" class="kn-badge" style="color:#7dd3fc">🎧 સાંભળી રહ્યો છું</span>
             <button id="kn-pause" class="px-2.5 py-1 rounded-md font-semibold"
                     style="background:#D4A017;color:#0B1220">⏸ થોભાવો</button>
           </div>
@@ -102,8 +103,25 @@
       if (st.state) KN.setPauseButton(st.state);
     },
 
+    setVoice(mode, text) {
+      const el = document.getElementById("kn-voice");
+      if (!el) return;
+      if (mode === "speaking") {
+        el.textContent = "🔊 બોલી રહ્યો છે";
+        el.style.color = "#fbbf24";
+        el.title = text || "";
+      } else if (mode === "paused") {
+        el.textContent = "⏸ થોભાવેલ";
+        el.style.color = "#94a3b8";
+      } else {
+        el.textContent = "🎧 સાંભળી રહ્યો છું";
+        el.style.color = "#7dd3fc";
+      }
+    },
+
     setPauseButton(state) {
       KN.state = state;
+      KN.setVoice(state === "paused" ? "paused" : "idle");
       const b = document.getElementById("kn-pause");
       if (!b) return;
       if (state === "paused") {
@@ -136,6 +154,9 @@
         if (msg.type === "camera.status" || msg.type === "mic.status") {
           KN.refreshStatusSoon();
         }
+        if (msg.type === "agent.speaking") KN.setVoice("speaking", msg.data.text);
+        if (msg.type === "agent.done")
+          KN.setVoice(KN.state === "paused" ? "paused" : "idle");
         KN.emit(msg.type, msg.data);
       };
       ws.onclose = () => {

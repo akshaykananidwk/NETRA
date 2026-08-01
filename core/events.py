@@ -25,6 +25,11 @@ FACE_UNCERTAIN = "face.uncertain"
 FACE_UNKNOWN = "face.unknown"
 FACE_SEEN = "face.seen"          # periodic "still here" update per track
 TRACK_LOST = "track.lost"
+SPEECH_TRANSCRIBED = "speech.transcribed"
+AGENT_SPEAKING = "agent.speaking"
+AGENT_DONE = "agent.done"
+UNKNOWN_UPDATED = "unknown.updated"   # spoken_name captured → refresh pending card
+GREETING_SPOKEN = "greeting.spoken"
 SYSTEM_STATUS = "system.status"
 ERROR = "error"
 

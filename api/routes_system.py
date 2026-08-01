@@ -55,6 +55,7 @@ def system_status():
         "detector_error": orchestrator.detector_error,
         "mic": orchestrator.mic_status,
         "cameras": orchestrator.camera_status,
+        "last_transcript": orchestrator.last_transcript,
         "today": {"visits": visits_today, "known_visitors": known_today,
                   "unknown_pending": unknown_pending,
                   "persons_total": persons_total},

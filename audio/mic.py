@@ -1,15 +1,12 @@
-"""Microphone health monitor (Phase 1).
+"""Microphone stream — 16 kHz mono int16 frames with health + auto-reconnect.
 
-Full listening pipeline (VAD / wake word / STT) arrives in Phase 2 — Phase 1
-only proves the mic works and drives the dashboard badge + level meter:
-
-  ok    — device open, audio flowing
-  muted — device open but RMS ≈ 0 for > 10 s
-  down  — device error / unplugged
+States: ok (audio flowing) · muted (open but silent > 10 s) · down (error).
+The AudioWorker consumes frames and publishes the status badges.
 """
 from __future__ import annotations
 
 import logging
+import queue
 import threading
 import time
 from typing import Optional
@@ -17,34 +14,58 @@ from typing import Optional
 import numpy as np
 
 from config import settings
-from core import events as ev
-from core.events import EventBus
 
 log = logging.getLogger("krishna.mic")
 
-SILENCE_RMS = 1e-4          # normalised float32 RMS below this counts as silence
+FRAME_MS = 30
+SILENCE_RMS = 60          # int16 RMS below this counts as silence
 SILENCE_SECS = 10.0
-REPORT_INTERVAL = 2.0
 
 
-class MicMonitor(threading.Thread):
-    def __init__(self, bus: EventBus) -> None:
-        super().__init__(daemon=True, name="mic-monitor")
-        self.bus = bus
+class MicStream(threading.Thread):
+    def __init__(self) -> None:
+        super().__init__(daemon=True, name="mic-stream")
+        self.frame_samples = settings.sample_rate * FRAME_MS // 1000
+        self._frames: "queue.Queue[bytes]" = queue.Queue(maxsize=300)
         self._stop = threading.Event()
+        self._buf = b""
         self.status = "down"
-        self.detail = ""
-        self._rms = 0.0
+        self.detail = "starting"
+        self.rms = 0.0
         self._last_loud = time.time()
+
+    def read(self, timeout: float = 0.5) -> Optional[bytes]:
+        """Next 30 ms int16 frame, or None on timeout."""
+        try:
+            return self._frames.get(timeout=timeout)
+        except queue.Empty:
+            return None
 
     def stop(self) -> None:
         self._stop.set()
 
+    @property
+    def level_pct(self) -> int:
+        return min(int(self.rms / 6000 * 100), 100)
+
     def _callback(self, indata, frames, t, cb_status) -> None:
-        rms = float(np.sqrt(np.mean(np.square(indata.astype(np.float32)))))
-        self._rms = rms
-        if rms > SILENCE_RMS:
-            self._last_loud = time.time()
+        data = bytes(indata)
+        self._buf += data
+        n = self.frame_samples * 2
+        while len(self._buf) >= n:
+            chunk, self._buf = self._buf[:n], self._buf[n:]
+            arr = np.frombuffer(chunk, dtype=np.int16)
+            self.rms = float(np.sqrt(np.mean(arr.astype(np.float32) ** 2)))
+            if self.rms > SILENCE_RMS:
+                self._last_loud = time.time()
+            try:
+                self._frames.put_nowait(chunk)
+            except queue.Full:
+                try:                      # drop oldest, keep newest
+                    self._frames.get_nowait()
+                    self._frames.put_nowait(chunk)
+                except queue.Empty:
+                    pass
 
     def run(self) -> None:
         stream = None
@@ -54,10 +75,11 @@ class MicMonitor(threading.Thread):
                     import sounddevice as sd
                     device = (None if settings.mic_device_index < 0
                               else settings.mic_device_index)
-                    stream = sd.InputStream(samplerate=settings.sample_rate,
-                                            channels=1, dtype="float32",
-                                            device=device,
-                                            callback=self._callback)
+                    stream = sd.RawInputStream(
+                        samplerate=settings.sample_rate, channels=1,
+                        dtype="int16", device=device,
+                        blocksize=self.frame_samples,
+                        callback=self._callback)
                     stream.start()
                     self._last_loud = time.time()
                     self.status = "ok"
@@ -67,10 +89,8 @@ class MicMonitor(threading.Thread):
                     stream = None
                     self.status = "down"
                     self.detail = str(e)
-                    self._publish()
                     self._stop.wait(5.0)
                     continue
-
             try:
                 if not stream.active:
                     raise RuntimeError("stream inactive")
@@ -88,9 +108,7 @@ class MicMonitor(threading.Thread):
                 stream = None
                 self.status = "down"
                 self.detail = str(e)
-
-            self._publish()
-            self._stop.wait(REPORT_INTERVAL)
+            self._stop.wait(1.0)
 
         if stream is not None:
             try:
@@ -98,8 +116,3 @@ class MicMonitor(threading.Thread):
                 stream.close()
             except Exception:
                 pass
-
-    def _publish(self) -> None:
-        self.bus.publish(ev.MIC_STATUS, status=self.status, detail=self.detail)
-        self.bus.publish(ev.MIC_LEVEL, rms=round(self._rms, 5),
-                         level=min(int(self._rms * 2500), 100))

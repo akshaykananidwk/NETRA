@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────
-# KRISHNA NETRA — Phase 1 (Eyes)
+# KRISHNA NETRA — Phases 1 (Eyes) + 2 (Voice)
 # Python 3.11
 # ─────────────────────────────────────────────────────────────
 fastapi==0.115.8
@@ -15,11 +15,17 @@ python-dotenv==1.0.1
 pydantic==2.10.4
 requests==2.32.3
 
+# --- Phase 2: voice ---
+webrtcvad==2.0.10
+faster-whisper==1.1.1
+edge-tts==7.0.0
+piper-tts==1.2.0             # offline TTS fallback (needs a gu_IN voice model)
+pygame==2.6.1
+
 # --- dev / tests ---
 pytest==8.3.4
 
 # ─────────────────────────────────────────────────────────────
-# Phase 2+ dependencies — DO NOT install yet, added per phase:
-#   webrtcvad, faster-whisper, speechbrain, openwakeword,
-#   edge-tts, piper-tts, pygame, apscheduler, anthropic, ollama
+# Phase 3+ dependencies — DO NOT install yet, added per phase:
+#   speechbrain, openwakeword, apscheduler, anthropic, ollama
 # ─────────────────────────────────────────────────────────────

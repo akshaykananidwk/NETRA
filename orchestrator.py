@@ -35,8 +35,14 @@ class Orchestrator:
         self.camera_status: Dict[int, dict] = {}
         self.detector_ready = False
         self.detector_error: Optional[str] = None
+        self.last_transcript: Optional[dict] = None
+        self.greeter = None
         # (kind, id, camera_id) -> {"visit_id", "last_seen", "last_db_write", "name"}
         self._active: Dict[tuple, dict] = {}
+
+    def attach_greeter(self, greeter) -> None:
+        self.greeter = greeter
+        greeter.orch = self
 
     # ── main loop ─────────────────────────────────────────────────────────
     async def run(self) -> None:
@@ -73,6 +79,8 @@ class Orchestrator:
             await self._on_seen(d)
         elif evt.type == ev.TRACK_LOST:
             await self._on_track_lost(d)
+        elif evt.type == ev.SPEECH_TRANSCRIBED:
+            await self._on_transcript(d)
         else:
             await self.hub.broadcast(evt.type, d)
 
@@ -115,6 +123,8 @@ class Orchestrator:
             self._log_activity("👤", f"{d['name']} ઓફિસમાં આવ્યા "
                                      f"({d.get('camera_name', '')})")
         await self.hub.broadcast(ev.FACE_RECOGNIZED, {**d, **info})
+        if self.greeter:
+            await self.greeter.on_known({**d, **info})
 
     async def _on_unknown(self, d: dict) -> None:
         if not self.state.vision_active:
@@ -154,6 +164,8 @@ class Orchestrator:
         if d.get("is_new"):
             self._log_activity("❓", f"નવો ચહેરો દેખાયો ({d['temp_uid']})")
         await self.hub.broadcast(ev.FACE_UNKNOWN, {**d, "embedding": None, **info})
+        if self.greeter:
+            await self.greeter.on_unknown(d)
 
     async def _on_seen(self, d: dict) -> None:
         ident = d.get("identity") or {}
@@ -245,6 +257,14 @@ class Orchestrator:
                 "last_db_write": now_ts}
         return {"visit_id": visit_id, "new_visit": new_visit}
 
+    async def _on_transcript(self, d: dict) -> None:
+        self.last_transcript = {"text": d.get("text"),
+                                "confidence": d.get("confidence"),
+                                "time": now_local().strftime("%H:%M")}
+        await self.hub.broadcast(ev.SPEECH_TRANSCRIBED, d)
+        if self.greeter:
+            await self.greeter.on_transcript(d)
+
     # ── UI helpers ────────────────────────────────────────────────────────
     def _log_activity(self, icon: str, text: str) -> None:
         self.activity.appendleft({"icon": icon, "text": text,
@@ -259,5 +279,6 @@ class Orchestrator:
             "cameras": self.camera_status,
             "detector_ready": self.detector_ready,
             "detector_error": self.detector_error,
+            "last_transcript": self.last_transcript,
             "activity": list(self.activity),
         }

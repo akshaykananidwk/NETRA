@@ -44,6 +44,8 @@
               <div x-text="u.temp_uid" class="font-mono"></div>
               <div x-text="'પહેલી વાર: ' + (u.first_seen||'')"></div>
               <div x-text="'છેલ્લે: ' + (u.last_seen||'')"></div>
+              <div x-show="u.spoken_name" class="mt-1" style="color:#D4A017"
+                   x-text="'🗣️ કહ્યું: ' + u.spoken_name"></div>
             </div>
           </div>
           <input class="kn-input" placeholder="પૂરું નામ *" x-model="u._name">
@@ -128,7 +130,8 @@ function dashboard() {
       const cams = await KN.api("/api/cameras").catch(() => []);
       const on = cams.find(c => c.enabled);
       this.camId = on ? on.id : null;
-      ["face.recognized", "face.unknown", "face.uncertain"].forEach(t =>
+      ["face.recognized", "face.unknown", "face.uncertain",
+       "unknown.updated", "greeting.spoken"].forEach(t =>
         KN.on(t, () => this.refresh()));
       setInterval(() => this.refresh(), 15000);
     },
@@ -140,7 +143,7 @@ function dashboard() {
         const old = Object.fromEntries(this.unknown.map(x => [x.temp_uid, x]));
         u.forEach(x => {
           const o = old[x.temp_uid] || {};
-          x._name = o._name || ""; x._call = o._call || "";
+          x._name = o._name || x.spoken_name || ""; x._call = o._call || "";
           x._phone = o._phone || ""; x._relation = o._relation || "visitor";
         });
         this.unknown = u;

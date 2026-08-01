@@ -44,8 +44,9 @@ log = logging.getLogger("krishna.main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from core.db import apply_db_settings, init_db, seed_defaults, set_health
-    from core.runtime import (bus, detector, matcher, mic_monitor,
-                              orchestrator, unknowns, vision_manager)
+    from core.runtime import (audio_worker, bus, detector, matcher,
+                              orchestrator, speaker, stt_worker, unknowns,
+                              vision_manager)
 
     init_db()
     seed_defaults()
@@ -61,15 +62,20 @@ async def lifespan(app: FastAPI):
                      name="detector-load").start()
 
     vision_manager.start_all()
-    mic_monitor.start()
+    speaker.start()          # TTS playback queue
+    stt_worker.start()       # loads whisper in its own thread, keeps it warm
+    audio_worker.start()     # mic → health → VAD → STT
     set_health("db", "ok", "")
+    set_health("tts", "degraded", "no speech yet")
     log.info("KRISHNA NETRA up — http://%s:%s", settings.host, settings.port)
 
     yield
 
     log.info("shutting down…")
     vision_manager.stop_all()
-    mic_monitor.stop()
+    audio_worker.stop()
+    stt_worker.stop()
+    speaker.stop()
     orch_task.cancel()
     try:
         await orch_task

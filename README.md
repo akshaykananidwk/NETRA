@@ -6,10 +6,13 @@ visit, and (in later phases) greets people in Gujarati, listens to meetings
 and executes voice commands. **All recognition and storage runs on the local
 machine** — no cloud dependency.
 
-> **Current status: Phase 1 — "Eyes"** ✅
-> Camera capture · face detection/recognition (InsightFace buffalo_l) ·
-> SQLite (WAL) · person registration from web UI · MJPEG live view ·
-> visitor log · camera + mic status badges · Gujarati web UI.
+> **Current status: Phase 2 — "Voice"** ✅
+> Everything from Phase 1 (camera capture, face recognition, visit log,
+> Gujarati web UI) **plus**: Gujarati TTS greetings (edge-tts + Piper
+> fallback, disk-cached), greeting on known face with a persisted 4-hour
+> cooldown, the unknown-visitor ask-name flow (max 2 asks/day), mic capture
+> → VAD → faster-whisper STT, and mic ducking so the agent never hears
+> itself.
 
 ## Quick start (laptop webcam)
 
@@ -41,6 +44,25 @@ Unknown faces appear on the dashboard as a "નવો ચહેરો — ના
 type the name, press સેવ, and the sighting embedding becomes their first
 enrollment — next time they're recognised by name.
 
+### Voice (Phase 2)
+
+- A recognised person is greeted aloud — *"નમસ્તે રમેશભાઈ, આપનું સ્વાગત
+  છે."* — at most once per `GREET_COOLDOWN_HOURS` per camera. The cooldown
+  lives in the `visits` table, so a restart never causes re-greeting spam.
+- An unknown visitor is welcomed and asked their name (at most
+  `UNKNOWN_ASK_MAX_PER_DAY` times a day, then silently logged). Whatever
+  Whisper hears is saved as `spoken_name` and pre-fills the dashboard's
+  pending-registration card for the admin to confirm.
+- TTS chain: **edge-tts** (`gu-IN-DhwaniNeural`, needs internet) → **Piper**
+  (offline, drop a Gujarati model at `PIPER_MODEL_PATH`) → skip-with-log.
+  Synthesised phrases are cached in `data/tts_cache/`, so repeated greetings
+  are instant and keep working offline.
+- While the speaker plays, mic input is dropped (**ducking**) so the agent
+  never transcribes its own voice.
+- First run downloads the Whisper model (`WHISPER_MODEL`, default `medium`,
+  ~1.5 GB) into `models/`; use `small` on a weaker CPU. The STT badge on the
+  Settings page shows load progress.
+
 ## Architecture (Phase 1 slice)
 
 ```
@@ -48,11 +70,14 @@ Browser ── REST + WebSocket + MJPEG ── FastAPI (main.py)
                                           │
                                     Orchestrator (asyncio)   ← event bus
                                           │
-        Vision workers (1 thread/camera)  │   Mic health monitor (thread)
-        capture → detect@5fps → IOU-track │
-        → recognise once per track ───────┘
+        Vision workers (1 thread/camera)  │   Audio worker (thread)
+        capture → detect@5fps → IOU-track │   mic → VAD → STT queue
+        → recognise once per track ───────┤
+                                          │   STT worker (whisper, warm)
+        Greeter (asyncio)                 │   Speaker thread (TTS queue,
+        known → greet · unknown → ask ────┘     mic ducking)
                                           │
-                                   SQLite WAL + snapshots
+                                   SQLite WAL + snapshots + tts_cache
 ```
 
 Key rules implemented:
@@ -75,11 +100,13 @@ orchestrator.py       event consumer, visit logging, activity feed
 config.py             .env → typed settings (+ runtime overrides from DB)
 core/                 schema.sql, SQLAlchemy models, event bus, state machine
 vision/               capture, detector, embedder, matcher, IOU tracker, worker
-audio/mic.py          mic health monitor (ok / muted / down) + level meter
+audio/                mic stream + health, VAD segmenter, whisper STT, worker
+speech/               TTS engine (edge → piper → skip) + playback/ducking
+agent/                greeter flows, name extraction (LLM brain in Phase 3)
 api/                  REST routes, MJPEG stream, WebSocket hub
 web/                  Gujarati UI — dashboard, live, people, visits, settings
-tests/                matcher, tracker, DB, orchestrator integration
-data/                 krishna.db, faces/, snapshots/   (created at runtime)
+tests/                matcher, tracker, DB, orchestrator, greeter, VAD, names
+data/                 krishna.db, faces/, snapshots/, tts_cache/  (runtime)
 ```
 
 ## Configuration
@@ -117,8 +144,8 @@ tests run on synthetic embeddings.
 
 | Phase | Scope |
 |---|---|
-| **1 — Eyes** ✅ | this release |
-| 2 — Voice | Gujarati TTS greetings, VAD + Whisper STT, unknown-name flow, mic ducking |
+| **1 — Eyes** ✅ | face recognition, visit log, live view, web UI |
+| **2 — Voice** ✅ | this release — TTS greetings, VAD + Whisper STT, unknown-name flow, mic ducking |
 | 3 — Brain | wake word, admin voice print, LLM agent + tools, WhatsApp tea ordering, tasks/reminders |
 | 4 — Meetings | recorder, rolling transcript, speaker labels, summary + task extraction |
 | 5 — Office scale | multi-RTSP, anti-spoof, attendance, Cloudflare Tunnel, Windows service |

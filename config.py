@@ -61,6 +61,18 @@ class Settings:
     # audio
     mic_device_index: int
     sample_rate: int
+    vad_aggressiveness: int
+    reply_timeout_sec: float
+    # stt
+    whisper_model: str
+    whisper_language: str
+    stt_always_on: bool
+    # tts
+    tts_engine: str
+    edge_voice: str
+    tts_rate: str
+    piper_model_path: Path
+    tts_cache_dir: Path
     # data
     snapshot_retention_days: int
     db_path: Path
@@ -112,6 +124,16 @@ def _load() -> Settings:
         use_gpu=_b("USE_GPU", False),
         mic_device_index=_i("MIC_DEVICE_INDEX", -1),
         sample_rate=_i("SAMPLE_RATE", 16000),
+        vad_aggressiveness=_i("VAD_AGGRESSIVENESS", 2),
+        reply_timeout_sec=_f("REPLY_TIMEOUT_SEC", 12),
+        whisper_model=_s("WHISPER_MODEL", "medium"),
+        whisper_language=_s("WHISPER_LANGUAGE", "gu"),
+        stt_always_on=_b("STT_ALWAYS_ON", True),
+        tts_engine=_s("TTS_ENGINE", "edge"),
+        edge_voice=_s("EDGE_VOICE", "gu-IN-DhwaniNeural"),
+        tts_rate=_s("TTS_RATE", "+5%"),
+        piper_model_path=BASE_DIR / _s("PIPER_MODEL_PATH", "models/piper/gu_IN.onnx"),
+        tts_cache_dir=db_path.parent / "tts_cache",
         snapshot_retention_days=_i("SNAPSHOT_RETENTION_DAYS", 90),
         db_path=db_path,
         data_dir=data_dir,
@@ -127,5 +149,6 @@ settings = _load()
 
 def ensure_dirs() -> None:
     for p in (settings.data_dir, settings.faces_dir, settings.snapshots_dir,
-              settings.models_dir, settings.logs_dir, settings.data_dir / "backups"):
+              settings.models_dir, settings.logs_dir, settings.tts_cache_dir,
+              settings.data_dir / "backups"):
         p.mkdir(parents=True, exist_ok=True)

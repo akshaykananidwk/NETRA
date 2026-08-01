@@ -36,7 +36,10 @@
              :style="'width:'+micLevel+'%'"></div>
       </div>
       <div class="text-sm text-slate-400">
-        છેલ્લું સાંભળેલું: <span class="text-slate-200">— (Phase 2 માં આવશે)</span>
+        છેલ્લું સાંભળેલું:
+        <span class="text-slate-200" x-text="lastHeard || '—'"></span>
+        <span class="text-xs text-slate-500" x-show="lastConf"
+              x-text="'(' + lastConf + '%)'"></span>
       </div>
       <div class="grid grid-cols-2 gap-2">
         <button class="kn-btn kn-btn-ghost" @click="setState('mute_mic')">🔇 માઇક બંધ</button>
@@ -71,13 +74,21 @@
 function live() {
   return {
     cameras: [], camId: null, bust: Date.now(), micLevel: 0,
-    cmd: "", sightings: [],
+    cmd: "", sightings: [], lastHeard: "", lastConf: null,
     async init() {
       await KN.init("live.html");
       this.cameras = await KN.api("/api/cameras").catch(() => []);
       const on = this.cameras.find(c => c.enabled);
       this.camId = on ? on.id : null;
       KN.on("mic.level", d => { this.micLevel = d.level || 0; });
+      KN.on("speech.transcribed", d => {
+        this.lastHeard = d.text;
+        this.lastConf = d.confidence ? Math.round(d.confidence * 100) : null;
+        this.log("🗣️", d.text);
+      });
+      KN.on("agent.speaking", d => this.log("🔊", d.text));
+      const st = await KN.api("/api/system/status").catch(() => ({}));
+      if (st.last_transcript) this.lastHeard = st.last_transcript.text;
       KN.on("face.recognized", d => this.log("🟢", `${d.name} ઓળખાયા (${Math.round((d.confidence||0)*100)}%)`));
       KN.on("face.uncertain", d => this.log("🟡", `કદાચ ${d.name}? (${Math.round((d.confidence||0)*100)}%)`));
       KN.on("face.unknown", d => this.log("🔴", `અજાણ્યો ચહેરો ${d.temp_uid}`));
