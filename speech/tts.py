@@ -54,6 +54,7 @@ class TTSEngine:
 
         engines = (["edge", "piper"] if settings.tts_engine == "edge"
                    else ["piper", "edge"])
+        errors = []
         for engine in engines:
             try:
                 if engine == "edge":
@@ -65,8 +66,11 @@ class TTSEngine:
                     self.last_error = None
                     return str(path)
             except Exception as e:
-                self.last_error = f"{engine}: {e}"
+                errors.append(f"{engine}: {type(e).__name__}: {e}")
                 log.warning("tts %s failed: %s", engine, e)
+        # keep every engine's failure visible — the primary engine's error
+        # matters most and must not be hidden by the fallback's
+        self.last_error = " | ".join(errors) or "no engine produced audio"
         return None
 
     async def _edge(self, text: str) -> Optional[Path]:

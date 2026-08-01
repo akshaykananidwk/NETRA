@@ -21,6 +21,10 @@ class StateIn(BaseModel):
     state: str
 
 
+class SayIn(BaseModel):
+    text: str = "નમસ્તે, હું કૃષ્ણ છું. અવાજ ટેસ્ટ ચાલુ છે."
+
+
 class SettingsIn(BaseModel):
     values: Dict[str, str]
 
@@ -72,6 +76,21 @@ def set_state(body: StateIn):
     orchestrator.state.set(body.state)
     audit("web", "system.state", body.state)
     return {"state": body.state}
+
+
+@router.post("/system/say")
+async def say_test(body: SayIn):
+    """Speak a test phrase — surfaces exactly why TTS fails, per engine."""
+    from core.runtime import greeter, speaker, tts
+    ok = await greeter.say(body.text.strip() or "નમસ્તે")
+    return {
+        "ok": ok,
+        "engine": tts.last_engine,
+        "error": tts.last_error,
+        "speaker_available": speaker.available,
+        "speaker_detail": speaker.detail,
+        "state": greeter.state.state,
+    }
 
 
 @router.get("/system/health")

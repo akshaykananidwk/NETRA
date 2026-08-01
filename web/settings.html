@@ -161,7 +161,23 @@
 
   <!-- health -->
   <div class="kn-card p-4">
-    <h2 class="font-bold mb-2">🩺 સિસ્ટમ હેલ્થ</h2>
+    <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+      <h2 class="font-bold">🩺 સિસ્ટમ હેલ્થ</h2>
+      <button class="kn-btn kn-btn-ghost" @click="sayTest()" :disabled="saying"
+              x-text="saying ? 'બોલી રહ્યો છે…' : '🔊 અવાજ ટેસ્ટ'"></button>
+    </div>
+    <div x-show="sayResult" x-cloak class="text-xs mb-2 p-2 rounded kn-card"
+         :style="sayResult && sayResult.ok ? 'border-color:#16a34a55' : 'border-color:#b91c1c55'">
+      <template x-if="sayResult && sayResult.ok">
+        <span class="text-green-400"
+              x-text="'✅ અવાજ ગયો (engine: ' + (sayResult.engine||'?') + ')' +
+                      (sayResult.speaker_available ? '' : ' — પણ સ્પીકર બંધ છે: ' + sayResult.speaker_detail)"></span>
+      </template>
+      <template x-if="sayResult && !sayResult.ok">
+        <span class="text-red-300"
+              x-text="'❌ TTS નિષ્ફળ: ' + (sayResult.error || sayResult.state)"></span>
+      </template>
+    </div>
     <div class="space-y-1 text-sm">
       <template x-for="h in health" :key="h.component">
         <div class="flex gap-2">
@@ -185,6 +201,7 @@
 function settingsPage() {
   return {
     cameras: [], values: {}, health: [],
+    saying: false, sayResult: null,
     upd: { cfg: {}, repo: "", branch: "main", token: "", info: null,
            log: [], busy: null, restarting: false },
     newCam: { name: "", source_type: "webcam", source_url: "0" },
@@ -269,6 +286,15 @@ function settingsPage() {
       this.values = Object.fromEntries(
         Object.entries(s.editable).map(([k, v]) => [k, String(v)]));
       this.health = await KN.api("/api/system/health").catch(() => []);
+    },
+    async sayTest() {
+      this.saying = true; this.sayResult = null;
+      try {
+        this.sayResult = await KN.api("/api/system/say", { method: "POST",
+          json: { text: "નમસ્તે, હું કૃષ્ણ છું. અવાજ ટેસ્ટ ચાલુ છે." } });
+      } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+      this.saying = false;
+      this.refresh();
     },
     async save() {
       try {
