@@ -37,3 +37,7 @@ audio_worker = AudioWorker(
 )
 greeter = Greeter(tts, speaker, orchestrator.state, audio_worker)
 orchestrator.attach_greeter(greeter)
+
+from core.updater import UpdateManager  # noqa: E402  (imports core.db lazily)
+
+updater = UpdateManager(bus=bus)

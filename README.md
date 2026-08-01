@@ -14,7 +14,17 @@ machine** — no cloud dependency.
 > → VAD → faster-whisper STT, and mic ducking so the agent never hears
 > itself.
 
-## Quick start (laptop webcam)
+## Quick start — Windows (one click)
+
+1. Double-click **`install.bat`** once — it installs Python 3.11 (via winget
+   if missing), creates the venv, installs all packages, creates `.env`, and
+   opens the firewall port for phone access.
+2. Double-click **`start.bat`** — the server starts and **Google Chrome
+   opens on http://localhost:8000 automatically**. The window keeps a
+   restart loop, so crashes and GitHub updates come back up on their own.
+   Close the window to stop.
+
+## Quick start — manual / Linux
 
 ```bash
 # Python 3.11
@@ -28,6 +38,33 @@ python main.py
 
 Open **http://localhost:8000** (or `http://<LAN-IP>:8000` from a phone on the
 same Wi-Fi).
+
+## One-click GitHub updates
+
+Settings → **🔄 સોફ્ટવેર અપડેટ (GitHub)**. Save the repository
+(`owner/repo`), branch, and a GitHub token **once** — after that no file
+ever needs to be uploaded manually.
+
+- **🔍 Check for Update** — compares the running version against GitHub and
+  shows the new version's commit message, author, date, and how many
+  commits behind you are.
+- **⬇ Update Now** — one click does all of this, in order:
+  1. downloads the branch zip straight from GitHub to the server,
+  2. **backs up** the current code **and** the SQLite DB to
+     `data/backups/update_<timestamp>/`,
+  3. replaces the app files — `.env`, `data/`, `models/`, `logs/` are
+     **never** touched,
+  4. re-applies the idempotent schema + runs any pending
+     `migrations/*.sql` (each exactly once — see `migrations/README.md`),
+  5. clears `__pycache__`,
+  6. restarts the server (the `start.bat` loop / NSSM / systemd brings it
+     back), and the page reloads itself when it's up.
+- Any failure after files were applied triggers **automatic rollback** of
+  both code and DB from the backup, then a restart — the office never stays
+  broken.
+- `start.bat` / `install.bat` are running while cmd reads them, so updates
+  to them are written as `.bat.new` and adopted on the next start —
+  never corrupted mid-run.
 
 First run downloads the InsightFace `buffalo_l` model (~300 MB) into
 `models/` — the UI's AI badge turns green when it's ready.
@@ -105,8 +142,12 @@ speech/               TTS engine (edge → piper → skip) + playback/ducking
 agent/                greeter flows, name extraction (LLM brain in Phase 3)
 api/                  REST routes, MJPEG stream, WebSocket hub
 web/                  Gujarati UI — dashboard, live, people, visits, settings
-tests/                matcher, tracker, DB, orchestrator, greeter, VAD, names
-data/                 krishna.db, faces/, snapshots/, tts_cache/  (runtime)
+core/updater.py       one-click GitHub update (backup → apply → migrate → rollback)
+migrations/           numbered .sql files, applied once each during updates
+install.bat           one-time Windows setup (Python, venv, packages, firewall)
+start.bat             one-click start + auto-restart loop + opens Chrome
+tests/                matcher, tracker, DB, orchestrator, greeter, VAD, names, updater
+data/                 krishna.db, faces/, snapshots/, tts_cache/, backups/  (runtime)
 ```
 
 ## Configuration

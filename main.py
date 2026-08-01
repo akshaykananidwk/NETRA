@@ -86,9 +86,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Krishna Netra", version="1.0.0-phase1", lifespan=lifespan)
 
 from api import routes_cameras, routes_persons, routes_stream, routes_system, \
-    routes_visits, ws  # noqa: E402
+    routes_update, routes_visits, ws  # noqa: E402
 
 app.include_router(routes_system.router)
+app.include_router(routes_update.router)
 app.include_router(routes_persons.router)
 app.include_router(routes_visits.router)
 app.include_router(routes_cameras.router)

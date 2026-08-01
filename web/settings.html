@@ -17,6 +17,93 @@
 
   <h1 class="font-bold text-lg">⚙️ સેટિંગ્સ</h1>
 
+  <!-- GitHub one-click update -->
+  <div class="kn-card p-4 space-y-3" style="border-color:#D4A01755">
+    <div class="flex items-center justify-between flex-wrap gap-2">
+      <h2 class="font-bold" style="color:#D4A017">🔄 સોફ્ટવેર અપડેટ (GitHub)</h2>
+      <div class="text-xs text-slate-400">
+        વર્ઝન: <span class="font-mono text-slate-200"
+          x-text="upd.cfg.current_commit || 'અજાણ્યું'"></span>
+        <span x-show="upd.cfg.last_update_at"
+              x-text="' · છેલ્લું અપડેટ: ' + (upd.cfg.last_update_at||'').slice(0,16).replace('T',' ')"></span>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+      <div class="col-span-2 md:col-span-1">
+        <label class="text-xs text-slate-400">Repository (owner/repo)</label>
+        <input class="kn-input" x-model="upd.repo" placeholder="akshaykananidwk/NETRA">
+      </div>
+      <div>
+        <label class="text-xs text-slate-400">Branch</label>
+        <input class="kn-input" x-model="upd.branch" placeholder="main">
+      </div>
+      <div>
+        <label class="text-xs text-slate-400"
+               x-text="'Token' + (upd.cfg.token_set ? ' (સેવ થયેલ છે)' : '')"></label>
+        <input class="kn-input" type="password" x-model="upd.token"
+               :placeholder="upd.cfg.token_set ? '•••• બદલવો હોય તો જ લખો' : 'ghp_...'">
+      </div>
+      <button class="kn-btn" @click="updSave()">સેવ</button>
+    </div>
+
+    <div class="flex gap-2 flex-wrap">
+      <button class="kn-btn kn-btn-ghost" @click="updCheck()" :disabled="upd.busy"
+              x-text="upd.busy==='check' ? 'તપાસી રહ્યું છે…' : '🔍 Check for Update'"></button>
+      <button class="kn-btn kn-btn-gold" x-show="upd.info && upd.info.update_available"
+              @click="updRun()" :disabled="upd.busy"
+              x-text="upd.busy==='run' ? 'અપડેટ ચાલુ છે…' : '⬇ Update Now'"></button>
+    </div>
+
+    <!-- check result -->
+    <div x-show="upd.info" x-cloak class="text-sm space-y-1">
+      <template x-if="upd.info && !upd.info.update_available">
+        <div class="text-green-400">✅ સોફ્ટવેર લેટેસ્ટ વર્ઝન પર જ છે
+          (<span class="font-mono" x-text="upd.info.latest.short"></span>)</div>
+      </template>
+      <template x-if="upd.info && upd.info.update_available">
+        <div class="kn-card p-3 space-y-1" style="border-color:#1E88A855">
+          <div style="color:#D4A017" class="font-semibold">
+            ✨ નવું અપડેટ ઉપલબ્ધ છે<span x-show="upd.info.commits_behind"
+              x-text="' — ' + upd.info.commits_behind + ' commit'"></span>
+          </div>
+          <div><span class="font-mono text-xs bg-slate-800 px-1.5 py-0.5 rounded"
+                x-text="upd.info.latest.short"></span>
+            <span x-text="' ' + upd.info.latest.message"></span></div>
+          <div class="text-xs text-slate-400"
+               x-text="upd.info.latest.author + ' · ' + (upd.info.latest.date||'').replace('T',' ').replace('Z','')"></div>
+          <template x-for="c in upd.info.commits" :key="c.short">
+            <div class="text-xs text-slate-400 pl-2 border-l border-slate-700">
+              <span class="font-mono" x-text="c.short"></span>
+              <span x-text="' ' + c.message"></span>
+            </div>
+          </template>
+        </div>
+      </template>
+    </div>
+
+    <!-- progress log -->
+    <div x-show="upd.log.length" x-cloak
+         class="text-xs font-mono space-y-0.5 max-h-48 overflow-y-auto kn-card p-2">
+      <template x-for="(l,i) in upd.log" :key="i">
+        <div>
+          <span x-text="l.time"></span>
+          <span x-text="l.status==='ok' ? '✅' : l.status==='fail' ? '❌' : '⏳'"></span>
+          <span x-text="l.step"></span>
+          <span class="text-slate-400" x-text="l.detail ? ' — ' + l.detail : ''"></span>
+        </div>
+      </template>
+    </div>
+    <div x-show="upd.restarting" x-cloak class="text-sm" style="color:#D4A017">
+      ⏳ સર્વર રીસ્ટાર્ટ થાય છે — પેજ જાતે reload થશે…
+      (ન થાય તો start.bat ફરી ચલાવો)
+    </div>
+    <p class="text-xs text-slate-500">
+      🛡️ .env, data/, models/, logs/ ક્યારેય બદલાતાં નથી · અપડેટ પહેલાં આખો
+      backup (data/backups/) · error આવે તો આપોઆપ rollback.
+    </p>
+  </div>
+
   <!-- cameras -->
   <div class="kn-card p-4 space-y-3">
     <h2 class="font-bold">📹 કેમેરા</h2>
@@ -98,6 +185,8 @@
 function settingsPage() {
   return {
     cameras: [], values: {}, health: [],
+    upd: { cfg: {}, repo: "", branch: "main", token: "", info: null,
+           log: [], busy: null, restarting: false },
     newCam: { name: "", source_type: "webcam", source_url: "0" },
     fields: [
       { key: "face_match_threshold", label: "ઓળખ થ્રેશોલ્ડ (0.55)" },
@@ -116,6 +205,63 @@ function settingsPage() {
     async init() {
       await KN.init("settings.html");
       this.refresh();
+      this.updLoad();
+      KN.on("update.progress", l => {
+        this.upd.log.push(l);
+        if (l.step === "restart") this.updWaitForRestart();
+      });
+    },
+    async updLoad() {
+      this.upd.cfg = await KN.api("/api/update/config").catch(() => ({}));
+      this.upd.repo = this.upd.cfg.repo || "";
+      this.upd.branch = this.upd.cfg.branch || "main";
+    },
+    async updSave() {
+      if (!this.upd.repo) { KN.toast("Repository લખો (owner/repo)", "error"); return; }
+      try {
+        this.upd.cfg = await KN.api("/api/update/config", { method: "POST", json: {
+          repo: this.upd.repo, branch: this.upd.branch || "main",
+          token: this.upd.token || null } });
+        this.upd.token = "";
+        KN.toast("GitHub સેટિંગ્સ સેવ થઈ ✓ — હવે ફાઇલ અપલોડની જરૂર નથી", "ok");
+      } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+    },
+    async updCheck() {
+      this.upd.busy = "check"; this.upd.info = null; this.upd.log = [];
+      try {
+        this.upd.info = await KN.api("/api/update/check");
+      } catch (e) { KN.toast(e.message, "error"); }
+      this.upd.busy = null;
+    },
+    async updRun() {
+      if (!confirm("અપડેટ ચાલુ કરવું? (backup આપોઆપ લેવાશે, પછી સર્વર restart થશે)")) return;
+      this.upd.busy = "run"; this.upd.log = [];
+      try {
+        const r = await KN.api("/api/update/run", { method: "POST", json: { force: false } });
+        this.upd.log = r.log || this.upd.log;
+        if (r.ok && r.up_to_date) KN.toast("પહેલેથી લેટેસ્ટ વર્ઝન છે ✓", "ok");
+        else if (r.ok) { this.upd.restarting = true; this.updWaitForRestart(); }
+        else KN.toast("અપડેટ નિષ્ફળ: " + r.error + " (rollback થયો)", "error", 6000);
+      } catch (e) {
+        // connection died = server already restarting
+        this.upd.restarting = true; this.updWaitForRestart();
+      }
+      this.upd.busy = null;
+    },
+    updWaitForRestart() {
+      this.upd.restarting = true;
+      let tries = 0;
+      const poll = setInterval(async () => {
+        if (++tries > 60) { clearInterval(poll); return; }
+        try {
+          const st = await KN.api("/api/system/status");
+          if (st.uptime_sec < 60) {
+            clearInterval(poll);
+            KN.toast("અપડેટ પૂરું! નવું વર્ઝન ચાલુ છે ✓", "ok");
+            setTimeout(() => location.reload(), 1200);
+          }
+        } catch (e) {}
+      }, 2000);
     },
     async refresh() {
       this.cameras = await KN.api("/api/cameras").catch(() => []);
