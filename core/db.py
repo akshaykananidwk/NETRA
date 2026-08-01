@@ -23,11 +23,22 @@ Base = declarative_base()
 engine = None
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, expire_on_commit=False)
 
-_TZ = ZoneInfo(settings.timezone)
+try:
+    _TZ = ZoneInfo(settings.timezone)
+except Exception:
+    # Windows Python has no built-in IANA tz database (needs the `tzdata`
+    # package). Fall back to the system clock rather than crashing —
+    # the office PC's clock is IST anyway.
+    _TZ = None
+    logging.getLogger("krishna.db").warning(
+        "timezone %s unavailable (install `tzdata`) — using system time",
+        settings.timezone)
 
 
 def now_local() -> datetime:
     """Naive local (office) time — all app timestamps use this."""
+    if _TZ is None:
+        return datetime.now().replace(microsecond=0)
     return datetime.now(_TZ).replace(tzinfo=None, microsecond=0)
 
 

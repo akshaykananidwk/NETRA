@@ -17,6 +17,7 @@ sounddevice==0.5.1
 python-dotenv==1.0.1
 pydantic==2.10.4
 requests==2.32.3
+tzdata==2025.2               # IANA timezone db — Windows Python ships none
 
 # --- Phase 2: voice ---
 # webrtcvad-wheels = same library as webrtcvad but ships prebuilt wheels,
