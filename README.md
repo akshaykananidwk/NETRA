@@ -92,6 +92,9 @@ enrollment — next time they're recognised by name.
   pending-registration card for the admin to confirm.
 - TTS chain: **edge-tts** (`gu-IN-DhwaniNeural`, needs internet) → **Piper**
   (offline, drop a Gujarati model at `PIPER_MODEL_PATH`) → skip-with-log.
+  Piper is optional — its `piper-phonemize` dependency has no Windows wheel
+  for Python 3.11, so `install.bat` tries it best-effort and the app runs
+  fine without it (cached edge-tts phrases still work offline).
   Synthesised phrases are cached in `data/tts_cache/`, so repeated greetings
   are instant and keep working offline.
 - While the speaker plays, mic input is dropped (**ducking**) so the agent

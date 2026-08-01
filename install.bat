@@ -52,6 +52,10 @@ echo  [3/5] Installing packages (first time takes a few minutes)...
 ".venv\Scripts\python.exe" -m pip install --upgrade pip --quiet
 ".venv\Scripts\python.exe" -m pip install -r requirements.txt
 if errorlevel 1 ( echo  !! pip install failed - check internet & pause & exit /b 1 )
+rem optional offline TTS fallback - fine if this fails (no Windows py3.11 wheel)
+echo  [3/5] Trying optional piper-tts (ok if it fails)...
+".venv\Scripts\python.exe" -m pip install piper-tts >nul 2>&1
+if errorlevel 1 ( echo        piper-tts skipped - edge-tts will be the voice )
 
 rem --- 4. config + folders ---
 if not exist ".env" (

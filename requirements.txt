@@ -19,8 +19,12 @@ requests==2.32.3
 webrtcvad==2.0.10
 faster-whisper==1.1.1
 edge-tts==7.0.0
-piper-tts==1.2.0             # offline TTS fallback (needs a gu_IN voice model)
 pygame==2.6.1
+# piper-tts (offline TTS fallback) is OPTIONAL and not installed here:
+# its dependency piper-phonemize has no Windows wheel for Python 3.11.
+# install.bat attempts it best-effort; the app works fine without it
+# (edge-tts is the primary voice; without piper there is simply no
+# offline fallback voice).
 
 # --- dev / tests ---
 pytest==8.3.4
