@@ -18,7 +18,12 @@ machine** — no cloud dependency.
 
 1. Double-click **`install.bat`** once — it installs Python 3.11 (via winget
    if missing), creates the venv, installs all packages, creates `.env`, and
-   opens the firewall port for phone access.
+   opens the firewall port for phone access. Two packages get special
+   handling because they have no official Windows wheel: `webrtcvad` is
+   installed as the prebuilt `webrtcvad-wheels` fork, and `insightface`
+   falls back to a prebuilt community wheel (from the Gourieff/Assets
+   repo, the wheel the ComfyUI ecosystem uses) if the source build fails —
+   so **no C++ compiler is required**.
 2. Double-click **`start.bat`** — the server starts and **Google Chrome
    opens on http://localhost:8000 automatically**. The window keeps a
    restart loop, so crashes and GitHub updates come back up on their own.

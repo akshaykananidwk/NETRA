@@ -51,9 +51,35 @@ rem --- 3. packages ---
 echo  [3/5] Installing packages (first time takes a few minutes)...
 ".venv\Scripts\python.exe" -m pip install --upgrade pip --quiet
 ".venv\Scripts\python.exe" -m pip install -r requirements.txt
-if errorlevel 1 ( echo  !! pip install failed - check internet & pause & exit /b 1 )
-rem optional offline TTS fallback - fine if this fails (no Windows py3.11 wheel)
-echo  [3/5] Trying optional piper-tts (ok if it fails)...
+if errorlevel 1 (
+    echo.
+    echo  Some packages need a C++ compiler - retrying without those...
+    findstr /v /i /c:"insightface" requirements.txt > "%TEMP%\kn_requirements.txt"
+    ".venv\Scripts\python.exe" -m pip install -r "%TEMP%\kn_requirements.txt"
+    if errorlevel 1 ( echo  !! install failed - check internet & pause & exit /b 1 )
+)
+
+rem --- 3b. face engine: use prebuilt wheel when source build is impossible ---
+".venv\Scripts\python.exe" -c "import insightface" >nul 2>&1
+if errorlevel 1 (
+    echo  [3b]  Installing insightface prebuilt Windows wheel...
+    ".venv\Scripts\python.exe" -m pip install "https://github.com/Gourieff/Assets/raw/main/Insightface/insightface-0.7.3-cp311-cp311-win_amd64.whl"
+)
+".venv\Scripts\python.exe" -c "import insightface" >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo  !! insightface could not be installed - face recognition stays OFF.
+    echo     The app still runs; the AI badge will show red.
+    echo     Permanent fix: open "Visual Studio Installer", add the
+    echo     "Desktop development with C++" workload ^(includes Windows SDK^),
+    echo     then run install.bat again.
+    echo.
+) else (
+    echo  [3b]  Face engine OK
+)
+
+rem --- 3c. optional offline TTS - fine if this fails (no py3.11 wheel) ---
+echo  [3c]  Trying optional piper-tts (ok if it fails)...
 ".venv\Scripts\python.exe" -m pip install piper-tts >nul 2>&1
 if errorlevel 1 ( echo        piper-tts skipped - edge-tts will be the voice )
 

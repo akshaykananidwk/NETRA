@@ -6,6 +6,9 @@ fastapi==0.115.8
 uvicorn[standard]==0.34.0
 python-multipart==0.0.20
 opencv-python==4.10.0.84
+# insightface has NO Windows wheel on PyPI and needs a C++ compiler to
+# build from source. install.bat handles this automatically: it tries the
+# normal install first and falls back to a prebuilt community wheel.
 insightface==0.7.3
 onnxruntime==1.20.1          # swap for onnxruntime-gpu==1.20.1 if NVIDIA GPU + set USE_GPU=true
 numpy==1.26.4
@@ -16,7 +19,9 @@ pydantic==2.10.4
 requests==2.32.3
 
 # --- Phase 2: voice ---
-webrtcvad==2.0.10
+# webrtcvad-wheels = same library as webrtcvad but ships prebuilt wheels,
+# so no C++ compiler is needed on Windows (imports as `webrtcvad`)
+webrtcvad-wheels==2.0.14
 faster-whisper==1.1.1
 edge-tts==7.0.0
 pygame==2.6.1
