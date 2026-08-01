@@ -1,4 +1,5 @@
-"""Gujarati TTS — edge-tts (cloud) primary, Piper (offline) fallback.
+"""Gujarati TTS — edge-tts primary, gTTS (Google) cloud fallback, then
+Piper (offline) if a local model is present.
 
 Synthesised audio is cached on disk keyed by (engine, voice, rate, text), so
 repeated greetings are instant and yesterday's phrases keep working offline.
@@ -52,13 +53,20 @@ class TTSEngine:
             return None
         settings.tts_cache_dir.mkdir(parents=True, exist_ok=True)
 
-        engines = (["edge", "piper"] if settings.tts_engine == "edge"
-                   else ["piper", "edge"])
+        orders = {
+            "edge": ["edge", "gtts", "piper"],
+            "gtts": ["gtts", "edge", "piper"],
+            "piper": ["piper", "edge", "gtts"],
+        }
+        engines = orders.get(settings.tts_engine, orders["edge"])
         errors = []
         for engine in engines:
             try:
                 if engine == "edge":
                     path = await self._edge(text)
+                elif engine == "gtts":
+                    path = await asyncio.wait_for(
+                        asyncio.to_thread(self._gtts, text), timeout=10)
                 else:
                     path = await asyncio.to_thread(self._piper, text)
                 if path:
@@ -84,6 +92,18 @@ class TTSEngine:
         await asyncio.wait_for(communicate.save(str(tmp)), timeout=EDGE_TIMEOUT_SEC)
         if not tmp.exists() or tmp.stat().st_size == 0:
             raise RuntimeError("empty edge-tts output")
+        tmp.replace(path)
+        return path
+
+    def _gtts(self, text: str) -> Optional[Path]:
+        path = self._cache_path("gtts", text, "mp3")
+        if path.exists() and path.stat().st_size > 0:
+            return path
+        from gtts import gTTS
+        tmp = path.with_suffix(".part")
+        gTTS(text=text, lang="gu").save(str(tmp))
+        if not tmp.exists() or tmp.stat().st_size == 0:
+            raise RuntimeError("empty gTTS output")
         tmp.replace(path)
         return path
 

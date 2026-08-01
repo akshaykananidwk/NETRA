@@ -24,7 +24,10 @@ tzdata==2025.2               # IANA timezone db — Windows Python ships none
 # so no C++ compiler is needed on Windows (imports as `webrtcvad`)
 webrtcvad-wheels==2.0.14
 faster-whisper==1.1.1
-edge-tts==7.0.0
+# keep edge-tts CURRENT: Microsoft rotates the Sec-MS-GEC token scheme and
+# old versions start failing with 403 WSServerHandshakeError
+edge-tts==7.2.8
+gTTS==2.5.4                  # Google TTS — reliable Gujarati cloud fallback
 pygame==2.6.1
 # piper-tts (offline TTS fallback) is OPTIONAL and not installed here:
 # its dependency piper-phonemize has no Windows wheel for Python 3.11.
