@@ -85,7 +85,10 @@
           ચહેરાના ફોટા (3–5 સારા: સામે, ડાબે, જમણે, ચશ્માં સાથે/વગર)</label>
         <input type="file" accept="image/*" multiple class="kn-input" x-ref="photos">
       </div>
-      <div class="flex gap-2 justify-end">
+      <div class="flex gap-2 justify-end items-center flex-wrap">
+        <button x-show="form.id" class="kn-btn kn-btn-ghost text-sm"
+                @click="enrollVoice()" :disabled="enrolling"
+                x-text="enrolling ? '🎙️ બોલતા રહો… (15 સેક)' : '🎙️ અવાજ નોંધો'"></button>
         <button class="kn-btn kn-btn-ghost" @click="modal=false">રદ કરો</button>
         <button class="kn-btn kn-btn-gold" @click="save()" :disabled="saving"
                 x-text="saving ? 'સેવ થાય છે…' : 'સેવ કરો'"></button>
@@ -100,7 +103,7 @@ function people() {
     phone: "", company: "", relation_type: "visitor", preferred_drink: "",
     greeting_enabled: true });
   return {
-    persons: [], modal: false, form: empty(), saving: false,
+    persons: [], modal: false, form: empty(), saving: false, enrolling: false,
     async init() {
       await KN.init("people.html");
       this.refresh();
@@ -146,6 +149,16 @@ function people() {
         this.refresh();
       } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
       this.saving = false;
+    },
+    async enrollVoice() {
+      if (!this.form.id) return;
+      KN.toast("ઓફિસના માઇક પાસે ઊભા રહી 15 સેકન્ડ બોલતા રહો…", "info", 15000);
+      this.enrolling = true;
+      try {
+        await KN.api(`/api/persons/${this.form.id}/voice`, { method: "POST" });
+        KN.toast("અવાજ નોંધાઈ ગયો ✓", "ok");
+      } catch (e) { KN.toast(e.message, "error", 8000); }
+      this.enrolling = false;
     },
     async delPerson(p) {
       if (!confirm(`${p.full_name} — બધો ડેટા (ફોટા, મુલાકાત) કાયમ માટે કાઢી નાખવો?`)) return;

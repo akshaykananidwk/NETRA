@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>કૃષ્ણ નેત્ર — લોગિન</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Gujarati:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body class="gujarati flex items-center justify-center min-h-screen">
+<div class="kn-card p-8 w-full max-w-sm space-y-4 text-center">
+  <div class="text-4xl">🦚</div>
+  <h1 class="text-xl font-bold" style="color:#D4A017">કૃષ્ણ નેત્ર</h1>
+  <p class="text-sm text-slate-400">AK Computer, દ્વારકા</p>
+  <form id="f" class="space-y-3">
+    <input id="pw" type="password" class="kn-input text-center"
+           placeholder="પાસવર્ડ" autofocus>
+    <button class="kn-btn kn-btn-gold w-full">અંદર આવો</button>
+  </form>
+  <p id="err" class="text-sm text-red-400 hidden">ખોટો પાસવર્ડ</p>
+</div>
+<script>
+document.getElementById("f").onsubmit = async (e) => {
+  e.preventDefault();
+  const r = await fetch("/api/login", { method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password: document.getElementById("pw").value }) });
+  if (r.ok) location.href = "/";
+  else document.getElementById("err").classList.remove("hidden");
+};
+</script>
+</body>
+</html>

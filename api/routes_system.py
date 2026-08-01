@@ -51,9 +51,16 @@ def system_status():
                     "call_name": p.call_name, "relation_type": p.relation_type,
                     "photo_path": p.photo_path}
                    for _, p in {v.person_id: (v, p) for v, p in present_rows}.values()]
+    with SessionLocal() as s:
+        wa_row = s.get(SystemHealth, "whatsapp")
+        llm_row = s.get(SystemHealth, "llm")
     return {
         "state": orchestrator.state.state,
         "uptime_sec": orchestrator.state.uptime_sec,
+        "whatsapp": ({"status": wa_row.status, "detail": wa_row.detail}
+                     if wa_row else None),
+        "llm": ({"status": llm_row.status, "detail": llm_row.detail}
+                if llm_row else None),
         "now": str(now_local()),
         "detector_ready": orchestrator.detector_ready,
         "detector_error": orchestrator.detector_error,
@@ -115,6 +122,15 @@ def save_settings(body: SettingsIn):
     with SessionLocal() as s:
         for key, raw in body.values.items():
             key_l = key.lower()
+            if key_l.startswith("collection:"):
+                # daily collection figure — stored verbatim for the agent
+                row = s.get(Setting, key_l)
+                if row is None:
+                    s.add(Setting(key=key_l, value=str(raw)))
+                else:
+                    row.value = str(raw)
+                applied[key_l] = raw
+                continue
             typ = settings.RUNTIME_EDITABLE.get(key_l)
             if typ is None:
                 rejected[key] = "unknown key"

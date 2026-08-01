@@ -25,9 +25,10 @@ PROMPT_TTL_SEC = 120
 
 
 class STTWorker(threading.Thread):
-    def __init__(self, bus: EventBus) -> None:
+    def __init__(self, bus: EventBus, speaker_id=None) -> None:
         super().__init__(daemon=True, name="stt-worker")
         self.bus = bus
+        self.speaker_id = speaker_id
         self._queue: "queue.Queue[Optional[dict]]" = queue.Queue(maxsize=8)
         self._stop = threading.Event()
         self._model = None
@@ -135,6 +136,20 @@ class STTWorker(threading.Thread):
                       if logprobs else None)
         log.info("heard (%.1fs, %.0fms): %s", duration,
                  (time.time() - t0) * 1000, text)
+
+        speaker_fields = {}
+        if self.speaker_id is not None and self.speaker_id.ready:
+            try:
+                match = self.speaker_id.identify(pcm)
+                if match:
+                    pid, name, is_admin, score = match
+                    speaker_fields = {"speaker_person_id": pid,
+                                      "speaker_name": name,
+                                      "speaker_is_admin": is_admin,
+                                      "speaker_score": round(score, 3)}
+            except Exception:
+                log.exception("speaker identify failed")
+
         self.bus.publish(ev.SPEECH_TRANSCRIBED, text=text,
                          confidence=confidence, duration_sec=round(duration, 2),
-                         context=item["context"])
+                         context=item["context"], **speaker_fields)

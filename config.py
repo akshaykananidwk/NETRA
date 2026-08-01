@@ -73,6 +73,27 @@ class Settings:
     tts_rate: str
     piper_model_path: Path
     tts_cache_dir: Path
+    # wake word + speaker id
+    wake_words: tuple
+    speaker_match_threshold: float
+    admin_face_window_sec: float
+    # llm
+    llm_provider: str
+    anthropic_api_key: str
+    anthropic_model: str
+    ollama_host: str
+    ollama_model: str
+    llm_timeout_sec: float
+    # whatsapp
+    wa_api_base: str
+    wa_api_key: str
+    wa_device_id: str
+    wa_send_path: str
+    wa_canteen_number: str
+    wa_admin_number: str
+    wa_timeout_sec: float
+    # security
+    admin_password: str
     # data
     snapshot_retention_days: int
     db_path: Path
@@ -134,6 +155,26 @@ def _load() -> Settings:
         tts_rate=_s("TTS_RATE", "+5%"),
         piper_model_path=BASE_DIR / _s("PIPER_MODEL_PATH", "models/piper/gu_IN.onnx"),
         tts_cache_dir=db_path.parent / "tts_cache",
+        # built-in variants always included — Whisper spells "કૃષ્ણ" many ways
+        wake_words=tuple(dict.fromkeys(
+            [w.strip().lower() for w in _s("WAKE_WORD", "").split(",") if w.strip()]
+            + ["krishna", "krishn", "કૃષ્ણ", "ક્રિષ્ના", "ક્રિશ્ના", "કૃષ્ના"])),
+        speaker_match_threshold=_f("SPEAKER_MATCH_THRESHOLD", 0.72),
+        admin_face_window_sec=_f("ADMIN_FACE_WINDOW_SEC", 30),
+        llm_provider=_s("LLM_PROVIDER", "anthropic"),
+        anthropic_api_key=_s("ANTHROPIC_API_KEY", ""),
+        anthropic_model=_s("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+        ollama_host=_s("OLLAMA_HOST", "http://localhost:11434"),
+        ollama_model=_s("OLLAMA_MODEL", "qwen2.5:7b-instruct"),
+        llm_timeout_sec=_f("LLM_TIMEOUT_SEC", 8),
+        wa_api_base=_s("WA_API_BASE", "https://bulk.akdwk.in/api"),
+        wa_api_key=_s("WA_API_KEY", ""),
+        wa_device_id=_s("WA_DEVICE_ID", ""),
+        wa_send_path=_s("WA_SEND_PATH", "/send-message"),
+        wa_canteen_number=_s("WA_CANTEEN_NUMBER", ""),
+        wa_admin_number=_s("WA_ADMIN_NUMBER", ""),
+        wa_timeout_sec=_f("WA_TIMEOUT_SEC", 10),
+        admin_password=_s("ADMIN_PASSWORD", ""),
         snapshot_retention_days=_i("SNAPSHOT_RETENTION_DAYS", 90),
         db_path=db_path,
         data_dir=data_dir,

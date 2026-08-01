@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
 from config import ensure_dirs, settings
@@ -65,8 +65,19 @@ async def lifespan(app: FastAPI):
     speaker.start()          # TTS playback queue
     stt_worker.start()       # loads whisper in its own thread, keeps it warm
     audio_worker.start()     # mic → health → VAD → STT
+
+    from core.runtime import reminders, speaker_id, whatsapp
+    reminders.start()        # re-arms scheduled reminders from the DB
+    whatsapp.start_flusher() # delivers queued messages when back online
+    threading.Thread(target=speaker_id.load, daemon=True,
+                     name="speaker-id-load").start()
     set_health("db", "ok", "")
     set_health("tts", "degraded", "no speech yet")
+    set_health("llm", "degraded",
+               "no command yet" if settings.anthropic_api_key
+               else "ANTHROPIC_API_KEY સેટ નથી — ollama/rules fallback")
+    if not whatsapp.configured:
+        set_health("whatsapp", "down", "WA_API_KEY સેટ નથી (.env)")
     log.info("KRISHNA NETRA up — http://%s:%s", settings.host, settings.port)
 
     yield
@@ -76,6 +87,8 @@ async def lifespan(app: FastAPI):
     audio_worker.stop()
     stt_worker.stop()
     speaker.stop()
+    reminders.stop()
+    whatsapp.stop()
     orch_task.cancel()
     try:
         await orch_task
@@ -83,13 +96,57 @@ async def lifespan(app: FastAPI):
         pass
 
 
-app = FastAPI(title="Krishna Netra", version="1.0.0-phase1", lifespan=lifespan)
+app = FastAPI(title="Krishna Netra", version="1.0.0-phase3", lifespan=lifespan)
 
-from api import routes_cameras, routes_persons, routes_stream, routes_system, \
-    routes_update, routes_visits, ws  # noqa: E402
+
+# ── simple admin login (enabled when ADMIN_PASSWORD is set in .env) ───────
+def _auth_token() -> str:
+    import hashlib
+    import hmac as hmac_mod
+    return hmac_mod.new(settings.admin_password.encode("utf-8"),
+                        b"krishna-netra-login",
+                        hashlib.sha256).hexdigest()
+
+
+_PUBLIC_PATHS = ("/login.html", "/api/login", "/assets/")
+
+
+@app.middleware("http")
+async def auth_middleware(request, call_next):
+    if not settings.admin_password:
+        return await call_next(request)
+    path = request.url.path
+    if any(path == p or path.startswith(p) for p in _PUBLIC_PATHS):
+        return await call_next(request)
+    if request.cookies.get("kn_auth") == _auth_token():
+        return await call_next(request)
+    from fastapi.responses import JSONResponse, RedirectResponse
+    if path.startswith(("/api/", "/stream", "/media")):
+        return JSONResponse({"detail": "login required"}, status_code=401)
+    return RedirectResponse("/login.html", status_code=302)
+
+
+@app.post("/api/login")
+async def login(request: Request):
+    from fastapi.responses import JSONResponse
+    body = await request.json()
+    if not settings.admin_password:
+        return JSONResponse({"ok": True})
+    if str(body.get("password", "")) != settings.admin_password:
+        return JSONResponse({"detail": "ખોટો પાસવર્ડ"}, status_code=401)
+    resp = JSONResponse({"ok": True})
+    resp.set_cookie("kn_auth", _auth_token(), max_age=30 * 86400,
+                    httponly=True, samesite="lax")
+    return resp
+
+
+from api import routes_agent, routes_cameras, routes_persons, routes_stream, \
+    routes_system, routes_tasks, routes_update, routes_visits, ws  # noqa: E402
 
 app.include_router(routes_system.router)
 app.include_router(routes_update.router)
+app.include_router(routes_tasks.router)
+app.include_router(routes_agent.router)
 app.include_router(routes_persons.router)
 app.include_router(routes_visits.router)
 app.include_router(routes_cameras.router)

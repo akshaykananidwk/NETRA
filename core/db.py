@@ -158,6 +158,90 @@ class Visit(Base):
     status = Column(Text, default="known")
 
 
+class Meeting(Base):
+    __tablename__ = "meetings"
+    id = Column(Integer, primary_key=True)
+    title = Column(Text)
+    started_at = Column(DateTime, nullable=False)
+    ended_at = Column(DateTime)
+    camera_id = Column(Integer)
+    audio_path = Column(Text)
+    language = Column(Text, default="gu")
+    summary = Column(Text)
+    key_points = Column(Text)
+    decisions = Column(Text)
+    status = Column(Text, default="recording")
+
+
+class Task(Base):
+    __tablename__ = "tasks"
+    id = Column(Integer, primary_key=True)
+    title = Column(Text, nullable=False)
+    description = Column(Text)
+    assignee_id = Column(Integer, ForeignKey("persons.id"))
+    assignee_name = Column(Text)
+    due_at = Column(DateTime)
+    priority = Column(Text, default="medium")
+    status = Column(Text, default="open")
+    source = Column(Text, default="voice")
+    meeting_id = Column(Integer, ForeignKey("meetings.id"))
+    created_at = Column(DateTime, default=now_local)
+    completed_at = Column(DateTime)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id, "title": self.title, "description": self.description,
+            "assignee_id": self.assignee_id, "assignee_name": self.assignee_name,
+            "due_at": str(self.due_at or ""), "priority": self.priority,
+            "status": self.status, "source": self.source,
+            "created_at": str(self.created_at or ""),
+            "completed_at": str(self.completed_at or ""),
+        }
+
+
+class Reminder(Base):
+    __tablename__ = "reminders"
+    id = Column(Integer, primary_key=True)
+    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"))
+    remind_at = Column(DateTime, nullable=False)
+    channel = Column(Text, default="voice")
+    target_phone = Column(Text)
+    message = Column(Text)
+    status = Column(Text, default="scheduled")
+    sent_at = Column(DateTime)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id, "task_id": self.task_id,
+            "remind_at": str(self.remind_at or ""), "channel": self.channel,
+            "message": self.message, "status": self.status,
+            "sent_at": str(self.sent_at or ""),
+        }
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+    id = Column(Integer, primary_key=True)
+    person_id = Column(Integer, ForeignKey("persons.id"))
+    channel = Column(Text, default="voice")
+    user_text = Column(Text)
+    agent_text = Column(Text)
+    tool_calls = Column(Text)
+    latency_ms = Column(Integer)
+    created_at = Column(DateTime, default=now_local)
+
+
+class WhatsAppLog(Base):
+    __tablename__ = "whatsapp_log"
+    id = Column(Integer, primary_key=True)
+    to_number = Column(Text, nullable=False)
+    message = Column(Text)
+    purpose = Column(Text)
+    status = Column(Text)
+    response = Column(Text)
+    created_at = Column(DateTime, default=now_local)
+
+
 class SystemHealth(Base):
     __tablename__ = "system_health"
     component = Column(Text, primary_key=True)

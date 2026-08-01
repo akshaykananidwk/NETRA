@@ -37,12 +37,34 @@ class Orchestrator:
         self.detector_error: Optional[str] = None
         self.last_transcript: Optional[dict] = None
         self.greeter = None
+        self.commander = None
+        self.last_admin_seen = 0.0
+        self.last_admin_person_id: Optional[int] = None
+        self.last_admin_name: Optional[str] = None
         # (kind, id, camera_id) -> {"visit_id", "last_seen", "last_db_write", "name"}
         self._active: Dict[tuple, dict] = {}
 
     def attach_greeter(self, greeter) -> None:
         self.greeter = greeter
         greeter.orch = self
+
+    def attach_commander(self, commander) -> None:
+        self.commander = commander
+        commander.attach(self)
+
+    def admin_recently_seen(self) -> bool:
+        from config import settings as cfg
+        return (time.time() - self.last_admin_seen) < cfg.admin_face_window_sec
+
+    def present_names(self) -> list:
+        """Call-names of people whose track was active in the last minute."""
+        cutoff = time.time() - 60
+        names = []
+        for entry in self._active.values():
+            if entry.get("last_seen", 0) >= cutoff and entry.get("name"):
+                if entry["name"] not in names:
+                    names.append(entry["name"])
+        return names
 
     # ── main loop ─────────────────────────────────────────────────────────
     async def run(self) -> None:
@@ -81,6 +103,9 @@ class Orchestrator:
             await self._on_track_lost(d)
         elif evt.type == ev.SPEECH_TRANSCRIBED:
             await self._on_transcript(d)
+        elif evt.type == "reminder.fired":
+            self._log_activity("⏰", f"રિમાઇન્ડર: {d.get('message', '')[:60]}")
+            await self.hub.broadcast("reminder.fired", d)
         else:
             await self.hub.broadcast(evt.type, d)
 
@@ -114,11 +139,25 @@ class Orchestrator:
             return
 
         def _write() -> dict:
-            return self._upsert_visit(kind="known", ident_id=d["person_id"],
+            info = self._upsert_visit(kind="known", ident_id=d["person_id"],
                                       camera_id=d["camera_id"],
                                       confidence=d.get("confidence"),
                                       snapshot=d.get("snapshot_path"))
+            with SessionLocal() as s:
+                from core.db import Person
+                p = s.get(Person, d["person_id"])
+                info["is_admin"] = bool(p and p.is_admin)
+                info["call_name"] = (p.call_name or p.full_name) if p else None
+            return info
+
         info = await asyncio.to_thread(_write)
+        if info.get("is_admin"):
+            self.last_admin_seen = time.time()
+            self.last_admin_person_id = d["person_id"]
+            self.last_admin_name = info.get("call_name") or d.get("name")
+        key = ("known", d["person_id"], d["camera_id"])
+        if key in self._active:
+            self._active[key]["name"] = info.get("call_name") or d.get("name")
         if info.get("new_visit"):
             self._log_activity("👤", f"{d['name']} ઓફિસમાં આવ્યા "
                                      f"({d.get('camera_name', '')})")
@@ -261,9 +300,18 @@ class Orchestrator:
         self.last_transcript = {"text": d.get("text"),
                                 "confidence": d.get("confidence"),
                                 "time": now_local().strftime("%H:%M")}
+        # a verified admin voice also refreshes the admin-present window
+        if d.get("speaker_is_admin"):
+            self.last_admin_seen = time.time()
+            self.last_admin_person_id = d.get("speaker_person_id")
+            self.last_admin_name = d.get("speaker_name")
         await self.hub.broadcast(ev.SPEECH_TRANSCRIBED, d)
-        if self.greeter:
+        # name-capture flow takes priority over commands
+        if self.greeter and self.greeter.awaiting is not None:
             await self.greeter.on_transcript(d)
+            return
+        if self.commander:
+            await self.commander.on_transcript(d)
 
     # ── UI helpers ────────────────────────────────────────────────────────
     def _log_activity(self, icon: str, text: str) -> None:

@@ -41,6 +41,13 @@ router = APIRouter()
 @router.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     from core.runtime import hub, orchestrator
+    # http middleware doesn't cover websockets — enforce login here too
+    from config import settings
+    if settings.admin_password:
+        from main import _auth_token
+        if ws.cookies.get("kn_auth") != _auth_token():
+            await ws.close(code=4401)
+            return
     await hub.connect(ws)
     try:
         # initial snapshot so badges render instantly

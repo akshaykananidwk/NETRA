@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>કૃષ્ણ નેત્ર — કામ</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Gujarati:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/app.js"></script>
+</head>
+<body class="gujarati">
+<div id="kn-header"></div>
+
+<main class="max-w-6xl mx-auto px-3 py-4 space-y-4" x-data="tasksPage()" x-init="init()">
+
+  <div class="flex flex-wrap items-center gap-3">
+    <h1 class="font-bold text-lg">📝 કામ / ટાસ્ક</h1>
+    <select class="kn-input !w-auto" x-model="range" @change="refresh()">
+      <option value="all">બધા</option><option value="today">આજના</option>
+      <option value="week">આ અઠવાડિયે</option><option value="overdue">મોડા પડેલા</option>
+    </select>
+    <select class="kn-input !w-auto" x-model="status" @change="refresh()">
+      <option value="">ખુલ્લા + ચાલુ</option><option value="open">ખુલ્લા</option>
+      <option value="done">પતી ગયેલા</option><option value="all">બધા સ્ટેટસ</option>
+    </select>
+  </div>
+
+  <!-- add task -->
+  <div class="kn-card p-4">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+      <div class="col-span-2"><label class="text-xs text-slate-400">કામ *</label>
+        <input class="kn-input" x-model="form.title" placeholder="દા.ત. રમેશને ફોન કરવો"></div>
+      <div><label class="text-xs text-slate-400">કોના માટે</label>
+        <input class="kn-input" x-model="form.assignee"></div>
+      <div><label class="text-xs text-slate-400">ક્યારે</label>
+        <input type="datetime-local" class="kn-input" x-model="form.due_at"></div>
+      <button class="kn-btn kn-btn-gold" @click="addTask()">+ ઉમેરો</button>
+    </div>
+  </div>
+
+  <!-- task list -->
+  <div class="space-y-2">
+    <template x-for="t in tasks" :key="t.id">
+      <div class="kn-card p-3 flex items-center gap-3">
+        <input type="checkbox" class="w-5 h-5" :checked="t.status==='done'"
+               @change="toggleDone(t, $event)">
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold" :class="t.status==='done' ? 'line-through text-slate-500' : ''"
+               x-text="t.title"></div>
+          <div class="text-xs text-slate-400 flex gap-2 flex-wrap mt-0.5">
+            <span x-show="t.assignee_name" x-text="'👤 ' + t.assignee_name"></span>
+            <span x-show="t.due_at" x-text="'🕒 ' + (t.due_at||'').slice(0,16)"></span>
+            <span class="kn-chip"
+                  :style="{urgent:'background:#7f1d1d;color:#fca5a5',
+                           high:'background:#7c2d1255;color:#fdba74'}[t.priority]
+                          || 'background:#1e293b;color:#94a3b8'"
+                  x-text="{low:'ધીમું',medium:'સામાન્ય',high:'અગત્યનું',urgent:'તાત્કાલિક'}[t.priority] || t.priority"></span>
+            <span class="text-slate-500" x-text="{voice:'🎙️ અવાજથી',meeting:'📋 મીટિંગ',manual:'⌨️'}[t.source] || ''"></span>
+          </div>
+        </div>
+        <button class="kn-btn kn-btn-ghost !px-2 !py-1 text-xs" @click="delTask(t)">🗑️</button>
+      </div>
+    </template>
+    <div class="text-slate-500 text-sm p-4" x-show="!tasks.length">કોઈ કામ નથી 🎉</div>
+  </div>
+
+  <!-- today's reminders -->
+  <div class="kn-card p-4">
+    <h2 class="font-bold mb-2">⏰ આજના રિમાઇન્ડર</h2>
+    <div class="space-y-1 text-sm">
+      <template x-for="r in reminders" :key="r.id">
+        <div class="flex gap-2 items-center">
+          <span x-text="r.status==='sent' ? '✅' : r.status==='scheduled' ? '🕒' : '❌'"></span>
+          <span class="text-slate-400" x-text="(r.remind_at||'').slice(11,16)"></span>
+          <span class="flex-1" x-text="r.message"></span>
+          <button x-show="r.status==='scheduled'" @click="cancelReminder(r)"
+                  class="text-xs text-slate-500 hover:text-red-400">રદ</button>
+        </div>
+      </template>
+      <div class="text-slate-500" x-show="!reminders.length">આજે કોઈ રિમાઇન્ડર નથી</div>
+    </div>
+  </div>
+</main>
+
+<script>
+function tasksPage() {
+  return {
+    tasks: [], reminders: [], range: "all", status: "",
+    form: { title: "", assignee: "", due_at: "" },
+    async init() {
+      await KN.init("tasks.html");
+      this.refresh();
+      ["task.created", "reminder.fired", "tool.executed"].forEach(t =>
+        KN.on(t, () => this.refresh()));
+    },
+    async refresh() {
+      const q = new URLSearchParams({ range: this.range });
+      if (this.status && this.status !== "all") q.set("status", this.status);
+      if (this.status === "all") q.set("status", "all");
+      this.tasks = await KN.api("/api/tasks?" + q).catch(() => []);
+      this.reminders = await KN.api("/api/reminders/today").catch(() => []);
+    },
+    async addTask() {
+      if (!this.form.title) { KN.toast("કામ લખો", "error"); return; }
+      try {
+        await KN.api("/api/tasks", { method: "POST", json: {
+          title: this.form.title, assignee: this.form.assignee || null,
+          due_at: this.form.due_at || null } });
+        this.form = { title: "", assignee: "", due_at: "" };
+        KN.toast("ટાસ્ક ઉમેરાયો ✓", "ok");
+        this.refresh();
+      } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+    },
+    async toggleDone(t, ev) {
+      try {
+        await KN.api(`/api/tasks/${t.id}`, { method: "PUT",
+          json: { status: ev.target.checked ? "done" : "open" } });
+        this.refresh();
+      } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+    },
+    async delTask(t) {
+      if (!confirm(`"${t.title}" કાઢી નાખવું?`)) return;
+      await KN.api(`/api/tasks/${t.id}`, { method: "DELETE" }).catch(() => {});
+      this.refresh();
+    },
+    async cancelReminder(r) {
+      await KN.api(`/api/reminders/${r.id}`, { method: "DELETE" }).catch(() => {});
+      this.refresh();
+    },
+  };
+}
+</script>
+</body>
+</html>

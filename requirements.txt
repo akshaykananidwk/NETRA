@@ -35,10 +35,18 @@ pygame==2.6.1
 # (edge-tts is the primary voice; without piper there is simply no
 # offline fallback voice).
 
+# --- Phase 3: brain ---
+anthropic==0.120.2
+apscheduler==3.11.3
+# speechbrain (ECAPA voice prints) is OPTIONAL — it pulls in torch (~2.5 GB).
+# Without it, admin verification falls back to "admin's face is on camera".
+# To enable:  pip install speechbrain torch --index-url https://download.pytorch.org/whl/cpu
+
 # --- dev / tests ---
 pytest==8.3.4
 
 # ─────────────────────────────────────────────────────────────
-# Phase 3+ dependencies — DO NOT install yet, added per phase:
-#   speechbrain, openwakeword, apscheduler, anthropic, ollama
+# Phase 4+ dependencies — DO NOT install yet, added per phase:
+#   openwakeword (custom wake model; Phase 3 detects the wake word
+#   in the Whisper transcript instead)
 # ─────────────────────────────────────────────────────────────

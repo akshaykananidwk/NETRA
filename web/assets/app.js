@@ -47,7 +47,7 @@
       const nav = [
         ["index.html", "ડેશબોર્ડ"], ["live.html", "લાઈવ"],
         ["people.html", "લોકો"], ["visits.html", "મુલાકાત"],
-        ["settings.html", "સેટિંગ્સ"],
+        ["tasks.html", "કામ"], ["settings.html", "સેટિંગ્સ"],
       ];
       const el = document.getElementById("kn-header");
       if (!el) return;
@@ -69,7 +69,7 @@
             <span id="badge-camera" class="kn-badge" title="કેમેરા">🔴 કેમેરા</span>
             <span id="badge-mic" class="kn-badge" title="માઇક">🔴 માઇક</span>
             <span id="badge-ai" class="kn-badge" title="AI મોડેલ">🔴 AI</span>
-            <span class="kn-badge opacity-40" title="WhatsApp — Phase 3">⚪ WhatsApp</span>
+            <span id="badge-wa" class="kn-badge" title="WhatsApp">🔴 WhatsApp</span>
             <span id="kn-voice" class="kn-badge" style="color:#7dd3fc">🎧 સાંભળી રહ્યો છું</span>
             <button id="kn-pause" class="px-2.5 py-1 rounded-md font-semibold"
                     style="background:#D4A017;color:#0B1220">⏸ થોભાવો</button>
@@ -100,6 +100,10 @@
         mic.status === "muted" ? "માઇક: અવાજ નથી" : "માઇક કનેક્ટ નથી", mic.detail);
       KN.setBadge("badge-ai", st.detector_ready ? "ok" : "down",
         st.detector_ready ? "AI તૈયાર" : "AI લોડ થાય છે…", st.detector_error || "");
+      const wa = st.whatsapp || {};
+      KN.setBadge("badge-wa",
+        wa.status === "ok" ? "ok" : wa.status === "degraded" ? "muted" : "down",
+        "WhatsApp", wa.detail || "");
       if (st.state) KN.setPauseButton(st.state);
     },
 

@@ -70,3 +70,11 @@ class EventBus:
 
     async def get(self) -> Event:
         return await self._queue.get()
+
+    def run_coroutine(self, coro) -> None:
+        """Schedule a coroutine on the main loop from any thread."""
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            coro.close()
+            return
+        asyncio.run_coroutine_threadsafe(coro, loop)

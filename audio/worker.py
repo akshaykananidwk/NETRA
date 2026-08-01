@@ -37,6 +37,8 @@ class AudioWorker(threading.Thread):
         self._reply_until = 0.0
         self._reply_context: dict = {}
         self._lock = threading.Lock()
+        self._record_buf: list = []
+        self._record_until = 0.0
 
     # ── called by the Greeter (any thread) ────────────────────────────────
     def open_reply_window(self, seconds: float, context: Optional[dict] = None) -> None:
@@ -54,6 +56,23 @@ class AudioWorker(threading.Thread):
             if time.time() < self._reply_until:
                 return dict(self._reply_context)
         return None
+
+    def record_seconds(self, seconds: float) -> bytes:
+        """Blocking capture of raw PCM (voice-print enrollment). Bypasses VAD."""
+        with self._lock:
+            self._record_buf = []
+            self._record_until = time.time() + seconds
+        deadline = time.time() + seconds + 2.0
+        while time.time() < deadline:
+            with self._lock:
+                if time.time() >= self._record_until:
+                    break
+            time.sleep(0.1)
+        with self._lock:
+            data = b"".join(self._record_buf)
+            self._record_buf = []
+            self._record_until = 0.0
+        return data
 
     def stop(self) -> None:
         self._stop.set()
@@ -77,6 +96,12 @@ class AudioWorker(threading.Thread):
 
             if frame is None:
                 continue
+            with self._lock:
+                recording = time.time() < self._record_until
+                if recording:
+                    self._record_buf.append(frame)
+            if recording:
+                continue                      # enrollment capture, skip VAD
             if self.is_ducked() or not self.mic_active():
                 self.vad.reset()
                 continue

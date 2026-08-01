@@ -50,12 +50,20 @@
     </div>
 
     <div class="kn-card p-4 space-y-3">
-      <h2 class="font-bold">⌨️ કમાન્ડ લખો</h2>
-      <p class="text-xs text-slate-500">બોલવાને બદલે લખો — એજન્ટ Phase 3 માં જવાબ આપશે.</p>
+      <h2 class="font-bold">⌨️ કૃષ્ણને લખીને કહો</h2>
+      <p class="text-xs text-slate-500">બોલવાને બદલે લખો — દા.ત. "બે ચા મંગાવ", "આજે કેટલા લોકો આવ્યા?"</p>
       <form @submit.prevent="sendCommand" class="flex gap-2">
-        <input class="kn-input" placeholder="દા.ત. બે ચા મંગાવ" x-model="cmd">
-        <button class="kn-btn kn-btn-gold shrink-0">મોકલો</button>
+        <input class="kn-input" placeholder="દા.ત. બે ચા મંગાવ" x-model="cmd"
+               :disabled="cmdBusy">
+        <button class="kn-btn kn-btn-gold shrink-0" :disabled="cmdBusy"
+                x-text="cmdBusy ? '…' : 'મોકલો'"></button>
       </form>
+      <div x-show="cmdReply" x-cloak class="text-sm p-2 rounded kn-card"
+           style="border-color:#1E88A855">
+        🤖 <span x-text="cmdReply"></span>
+        <div class="text-xs text-slate-500 mt-1" x-show="cmdMeta"
+             x-text="cmdMeta"></div>
+      </div>
       <h2 class="font-bold pt-2">👁️ તાજી ઓળખ</h2>
       <div class="space-y-1.5 max-h-48 overflow-y-auto text-sm">
         <template x-for="(e,i) in sightings" :key="i">
@@ -74,7 +82,8 @@
 function live() {
   return {
     cameras: [], camId: null, bust: Date.now(), micLevel: 0,
-    cmd: "", sightings: [], lastHeard: "", lastConf: null,
+    cmd: "", cmdBusy: false, cmdReply: "", cmdMeta: "",
+    sightings: [], lastHeard: "", lastConf: null,
     async init() {
       await KN.init("live.html");
       this.cameras = await KN.api("/api/cameras").catch(() => []);
@@ -105,10 +114,21 @@ function live() {
         KN.toast("સ્ટેટ બદલાયો: " + state, "ok");
       } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
     },
-    sendCommand() {
-      if (!this.cmd) return;
-      KN.toast("એજન્ટ Phase 3 માં આવશે — હમણાં કમાન્ડ ચાલતા નથી", "info", 4000);
-      this.cmd = "";
+    async sendCommand() {
+      if (!this.cmd || this.cmdBusy) return;
+      const text = this.cmd;
+      this.cmdBusy = true; this.cmdReply = ""; this.cmdMeta = "";
+      this.log("⌨️", text);
+      try {
+        const r = await KN.api("/api/agent/command", { method: "POST",
+          json: { text } });
+        this.cmdReply = r.reply;
+        this.cmdMeta = (r.tool_calls || []).map(t => t.name).join(", ")
+          + (r.tool_calls?.length ? " · " : "") + r.provider
+          + " · " + r.latency_ms + "ms";
+        this.cmd = "";
+      } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+      this.cmdBusy = false;
     },
   };
 }

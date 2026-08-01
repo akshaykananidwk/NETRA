@@ -6,13 +6,15 @@ visit, and (in later phases) greets people in Gujarati, listens to meetings
 and executes voice commands. **All recognition and storage runs on the local
 machine** — no cloud dependency.
 
-> **Current status: Phase 2 — "Voice"** ✅
-> Everything from Phase 1 (camera capture, face recognition, visit log,
-> Gujarati web UI) **plus**: Gujarati TTS greetings (edge-tts + Piper
-> fallback, disk-cached), greeting on known face with a persisted 4-hour
-> cooldown, the unknown-visitor ask-name flow (max 2 asks/day), mic capture
-> → VAD → faster-whisper STT, and mic ducking so the agent never hears
-> itself.
+> **Current status: Phase 3 — "Brain"** ✅
+> Everything from Phases 1–2 (face recognition, visit log, TTS greetings,
+> STT) **plus**: the LLM agent with all 15 tools and in-code permission
+> gates, wake word "કૃષ્ણ", WhatsApp tea ordering with an offline queue,
+> task + reminder engine (APScheduler, voice/WhatsApp/web channels),
+> type-a-command box, optional ECAPA voice prints with an admin-face
+> fallback, daily collection reports, and a simple admin login.
+> **"કૃષ્ણ, બે ચા મંગાવ" sends the WhatsApp message** — even with no
+> LLM reachable, via the rule-based fallback.
 
 ## Quick start — Windows (one click)
 
@@ -108,6 +110,33 @@ enrollment — next time they're recognised by name.
   ~1.5 GB) into `models/`; use `small` on a weaker CPU. The STT badge on the
   Settings page shows load progress.
 
+### Brain (Phase 3)
+
+- **Wake word**: say "કૃષ્ણ, …" (any spelling Whisper produces is matched;
+  variants configurable via `WAKE_WORD`). After a reply there is a 15 s
+  follow-up window where no wake word is needed. Typed commands work from
+  the Live page ("કૃષ્ણને લખીને કહો").
+- **The brain chain**: Anthropic (`ANTHROPIC_API_KEY` + `ANTHROPIC_MODEL`)
+  → Ollama (`OLLAMA_HOST`) → a rule-based matcher covering the common
+  commands (tea order, pause/resume, meetings, visitor log, collection,
+  task list, reminders) — so the office never goes fully dead offline.
+- **Permission gates enforced in code**: anyone can order tea; staff can
+  manage tasks/reminders; only the admin gets collection, visitor logs,
+  WhatsApp sending, registration, meetings, and system control. Admin is
+  verified by ECAPA voice print (optional — needs
+  `pip install speechbrain torch`) or, without it, by the admin's face
+  having been on camera within `ADMIN_FACE_WINDOW_SEC`.
+- **WhatsApp** (`bulk.akdwk.in` gateway, `.env` → `WA_*`): retries with
+  backoff, a disk-persisted offline queue flushed automatically, 1 msg/3 s
+  rate limit, full log in `whatsapp_log`.
+- **Tasks & reminders**: web page ("કામ"), REST API, and voice. Reminders
+  are re-armed from the DB on restart; channels: voice (speaker), whatsapp,
+  web, or all.
+- **Collection**: enter today's figure on the Settings page; then
+  "કૃષ્ણ, આજનું કલેક્શન કેટલું છે?" answers (admin only).
+- **Login**: set `ADMIN_PASSWORD` in `.env` to require a password on the
+  whole UI (pages, API, stream, and WebSocket). Empty = no login.
+
 ## Architecture (Phase 1 slice)
 
 ```
@@ -194,7 +223,8 @@ tests run on synthetic embeddings.
 | Phase | Scope |
 |---|---|
 | **1 — Eyes** ✅ | face recognition, visit log, live view, web UI |
-| **2 — Voice** ✅ | this release — TTS greetings, VAD + Whisper STT, unknown-name flow, mic ducking |
+| **2 — Voice** ✅ | TTS greetings, VAD + Whisper STT, unknown-name flow, mic ducking |
+| **3 — Brain** ✅ | this release — wake word, LLM agent + tools, WhatsApp, tasks/reminders, login |
 | 3 — Brain | wake word, admin voice print, LLM agent + tools, WhatsApp tea ordering, tasks/reminders |
 | 4 — Meetings | recorder, rolling transcript, speaker labels, summary + task extraction |
 | 5 — Office scale | multi-RTSP, anti-spoof, attendance, Cloudflare Tunnel, Windows service |

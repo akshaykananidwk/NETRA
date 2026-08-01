@@ -107,6 +107,17 @@
         <div class="text-sm text-slate-500" x-show="!st.activity || !st.activity.length">
           હજી કોઈ પ્રવૃત્તિ નથી</div>
       </div>
+      <h2 class="font-bold mb-2 mt-4">⏰ આજના રિમાઇન્ડર</h2>
+      <div class="space-y-1 text-sm">
+        <template x-for="r in reminders" :key="r.id">
+          <div class="flex gap-2">
+            <span x-text="r.status==='sent' ? '✅' : '🕒'"></span>
+            <span class="text-slate-400" x-text="(r.remind_at||'').slice(11,16)"></span>
+            <span x-text="r.message"></span>
+          </div>
+        </template>
+        <div class="text-slate-500" x-show="!reminders.length">કોઈ રિમાઇન્ડર નથી</div>
+      </div>
     </div>
   </div>
 </main>
@@ -114,7 +125,7 @@
 <script>
 function dashboard() {
   return {
-    st: {}, unknown: [], camId: null,
+    st: {}, unknown: [], reminders: [], camId: null,
     get counters() {
       const t = this.st.today || {};
       return [
@@ -138,6 +149,7 @@ function dashboard() {
     async refresh() {
       try {
         this.st = await KN.api("/api/system/status");
+        this.reminders = await KN.api("/api/reminders/today").catch(() => []);
         const u = await KN.api("/api/unknown");
         // keep half-typed names when the list refreshes
         const old = Object.fromEntries(this.unknown.map(x => [x.temp_uid, x]));
