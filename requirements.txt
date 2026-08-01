@@ -1,0 +1,25 @@
+# ─────────────────────────────────────────────────────────────
+# KRISHNA NETRA — Phase 1 (Eyes)
+# Python 3.11
+# ─────────────────────────────────────────────────────────────
+fastapi==0.115.8
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+opencv-python==4.10.0.84
+insightface==0.7.3
+onnxruntime==1.20.1          # swap for onnxruntime-gpu==1.20.1 if NVIDIA GPU + set USE_GPU=true
+numpy==1.26.4
+sqlalchemy==2.0.36
+sounddevice==0.5.1
+python-dotenv==1.0.1
+pydantic==2.10.4
+requests==2.32.3
+
+# --- dev / tests ---
+pytest==8.3.4
+
+# ─────────────────────────────────────────────────────────────
+# Phase 2+ dependencies — DO NOT install yet, added per phase:
+#   webrtcvad, faster-whisper, speechbrain, openwakeword,
+#   edge-tts, piper-tts, pygame, apscheduler, anthropic, ollama
+# ─────────────────────────────────────────────────────────────

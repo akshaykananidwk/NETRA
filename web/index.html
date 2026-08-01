@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>કૃષ્ણ નેત્ર — ડેશબોર્ડ</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Gujarati:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/app.js"></script>
+</head>
+<body class="gujarati">
+<div id="kn-header"></div>
+
+<main class="max-w-6xl mx-auto px-3 py-4 space-y-4" x-data="dashboard()" x-init="init()">
+
+  <!-- status + counters -->
+  <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
+    <div class="kn-card p-4 col-span-2">
+      <div class="text-sm text-slate-400">સિસ્ટમ</div>
+      <div class="text-lg font-bold" :style="st.state==='paused' ? 'color:#f59e0b' : 'color:#4ade80'"
+           x-text="st.state==='paused' ? '⏸ થોભાવેલ છે' : 'ચાલુ છે'"></div>
+      <div class="text-xs text-slate-400" x-text="KN.fmtUptime(st.uptime_sec||0) + ' થી'"></div>
+    </div>
+    <template x-for="c in counters" :key="c.label">
+      <div class="kn-card p-4 text-center">
+        <div class="text-2xl font-bold" style="color:#1E88A8" x-text="c.value"></div>
+        <div class="text-xs text-slate-400" x-text="c.label"></div>
+      </div>
+    </template>
+  </div>
+
+  <!-- pending unknown faces — the most important card -->
+  <div class="kn-card p-4" x-show="unknown.length" x-cloak>
+    <h2 class="font-bold mb-3" style="color:#D4A017">❓ નવા ચહેરા — નામ ઉમેરો</h2>
+    <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+      <template x-for="u in unknown" :key="u.temp_uid">
+        <div class="kn-card p-3 space-y-2" style="border-color:#D4A01755">
+          <div class="flex gap-3">
+            <img :src="KN.media(u.snapshot_path)" class="w-20 h-20 object-cover rounded-lg bg-slate-800"
+                 onerror="this.style.opacity=.2">
+            <div class="text-xs text-slate-400">
+              <div x-text="u.temp_uid" class="font-mono"></div>
+              <div x-text="'પહેલી વાર: ' + (u.first_seen||'')"></div>
+              <div x-text="'છેલ્લે: ' + (u.last_seen||'')"></div>
+            </div>
+          </div>
+          <input class="kn-input" placeholder="પૂરું નામ *" x-model="u._name">
+          <div class="grid grid-cols-2 gap-2">
+            <input class="kn-input" placeholder="બોલાવવાનું નામ (રમેશભાઈ)" x-model="u._call">
+            <input class="kn-input" placeholder="ફોન" x-model="u._phone">
+          </div>
+          <div class="flex gap-2">
+            <select class="kn-input" x-model="u._relation">
+              <option value="visitor">મુલાકાતી</option><option value="staff">સ્ટાફ</option>
+              <option value="vendor">વેન્ડર</option><option value="vip">VIP</option>
+            </select>
+            <button class="kn-btn kn-btn-gold shrink-0" @click="registerUnknown(u)">સેવ</button>
+            <button class="kn-btn kn-btn-ghost shrink-0" @click="ignoreUnknown(u)">છોડો</button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-4">
+    <!-- live thumbnail + present now -->
+    <div class="space-y-4">
+      <div class="kn-card p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="font-bold">📹 લાઈવ</h2>
+          <a href="live.html" class="text-xs" style="color:#1E88A8">પૂરું જુઓ →</a>
+        </div>
+        <img :src="camId ? '/stream/'+camId : ''" x-show="camId"
+             class="w-full rounded-lg bg-slate-900" style="max-height:280px;object-fit:contain">
+        <div x-show="!camId" class="text-sm text-slate-500 py-8 text-center">કેમેરા મળ્યો નથી</div>
+      </div>
+      <div class="kn-card p-4">
+        <h2 class="font-bold mb-2">🧍 હમણાં ઓફિસમાં કોણ છે</h2>
+        <div class="flex flex-wrap gap-3" x-show="st.present && st.present.length">
+          <template x-for="p in st.present" :key="p.person_id">
+            <div class="text-center">
+              <img :src="KN.media(p.photo_path)" class="w-12 h-12 rounded-full object-cover bg-slate-800 mx-auto"
+                   onerror="this.style.opacity=.2">
+              <div class="text-xs mt-1" x-text="p.call_name || p.name"></div>
+            </div>
+          </template>
+        </div>
+        <div class="text-sm text-slate-500" x-show="!st.present || !st.present.length">કોઈ નથી</div>
+      </div>
+    </div>
+
+    <!-- activity -->
+    <div class="kn-card p-4">
+      <h2 class="font-bold mb-2">🕒 તાજી પ્રવૃત્તિ</h2>
+      <div class="space-y-2 max-h-96 overflow-y-auto">
+        <template x-for="(a,i) in st.activity" :key="i">
+          <div class="flex gap-2 text-sm border-b border-slate-800 pb-1.5">
+            <span x-text="a.icon"></span>
+            <span class="flex-1" x-text="a.text"></span>
+            <span class="text-xs text-slate-500" x-text="a.time"></span>
+          </div>
+        </template>
+        <div class="text-sm text-slate-500" x-show="!st.activity || !st.activity.length">
+          હજી કોઈ પ્રવૃત્તિ નથી</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+function dashboard() {
+  return {
+    st: {}, unknown: [], camId: null,
+    get counters() {
+      const t = this.st.today || {};
+      return [
+        { label: "આજની મુલાકાત", value: t.visits ?? "–" },
+        { label: "ઓળખાયેલા", value: t.known_visitors ?? "–" },
+        { label: "નવા ચહેરા", value: t.unknown_pending ?? "–" },
+        { label: "નોંધાયેલા લોકો", value: t.persons_total ?? "–" },
+      ];
+    },
+    async init() {
+      await KN.init("index.html");
+      await this.refresh();
+      const cams = await KN.api("/api/cameras").catch(() => []);
+      const on = cams.find(c => c.enabled);
+      this.camId = on ? on.id : null;
+      ["face.recognized", "face.unknown", "face.uncertain"].forEach(t =>
+        KN.on(t, () => this.refresh()));
+      setInterval(() => this.refresh(), 15000);
+    },
+    async refresh() {
+      try {
+        this.st = await KN.api("/api/system/status");
+        const u = await KN.api("/api/unknown");
+        // keep half-typed names when the list refreshes
+        const old = Object.fromEntries(this.unknown.map(x => [x.temp_uid, x]));
+        u.forEach(x => {
+          const o = old[x.temp_uid] || {};
+          x._name = o._name || ""; x._call = o._call || "";
+          x._phone = o._phone || ""; x._relation = o._relation || "visitor";
+        });
+        this.unknown = u;
+      } catch (e) {}
+    },
+    async registerUnknown(u) {
+      if (!u._name) { KN.toast("નામ લખો", "error"); return; }
+      try {
+        await KN.api(`/api/unknown/${u.temp_uid}/register`, { method: "POST", json: {
+          full_name: u._name, call_name: u._call || null,
+          phone: u._phone || null, relation_type: u._relation || "visitor",
+        }});
+        KN.toast(`${u._name} નોંધાઈ ગયા ✓`, "ok");
+        this.refresh();
+      } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+    },
+    async ignoreUnknown(u) {
+      try {
+        await KN.api(`/api/unknown/${u.temp_uid}/ignore`, { method: "POST" });
+        this.refresh();
+      } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+    },
+  };
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>કૃષ્ણ નેત્ર — લોકો</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Gujarati:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/app.js"></script>
+</head>
+<body class="gujarati">
+<div id="kn-header"></div>
+
+<main class="max-w-6xl mx-auto px-3 py-4 space-y-4" x-data="people()" x-init="init()">
+
+  <div class="flex items-center justify-between">
+    <h1 class="font-bold text-lg">👥 લોકો (<span x-text="persons.length"></span>)</h1>
+    <button class="kn-btn kn-btn-gold" @click="openAdd()">+ નવી વ્યક્તિ</button>
+  </div>
+
+  <div class="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+    <template x-for="p in persons" :key="p.id">
+      <div class="kn-card p-3 flex gap-3">
+        <img :src="KN.media(p.photo_path)" class="w-16 h-16 rounded-lg object-cover bg-slate-800"
+             onerror="this.style.opacity=.2">
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold truncate" x-text="p.full_name"></div>
+          <div class="text-xs text-slate-400" x-text="p.call_name || ''"></div>
+          <div class="flex gap-1 mt-1 flex-wrap">
+            <span class="kn-chip" style="background:#1E88A833;color:#7dd3fc"
+                  x-text="KN.relationLabel(p.relation_type)"></span>
+            <span class="kn-chip" style="background:#D4A01733;color:#fbbf24"
+                  x-show="p.is_admin">એડમિન</span>
+            <span class="kn-chip bg-slate-800 text-slate-400"
+                  x-text="(p.face_count||0) + ' ફોટા'"></span>
+          </div>
+        </div>
+        <div class="flex flex-col gap-1">
+          <button class="text-xs kn-btn kn-btn-ghost !px-2 !py-1" @click="openEdit(p)">✏️</button>
+          <button class="text-xs kn-btn kn-btn-ghost !px-2 !py-1" @click="delPerson(p)">🗑️</button>
+        </div>
+      </div>
+    </template>
+  </div>
+  <div class="text-slate-500 text-sm" x-show="!persons.length">
+    હજી કોઈ નોંધાયેલ નથી — "+ નવી વ્યક્તિ" દબાવો. પહેલા AK ભાઈને એડમિન તરીકે ઉમેરો.
+  </div>
+
+  <!-- add / edit modal -->
+  <div x-show="modal" x-cloak class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4"
+       style="background:#000a">
+    <div class="kn-card p-4 w-full max-w-lg space-y-3 my-8">
+      <h2 class="font-bold" x-text="form.id ? 'વ્યક્તિ સુધારો' : 'નવી વ્યક્તિ ઉમેરો'"></h2>
+      <div class="grid grid-cols-2 gap-2">
+        <div class="col-span-2"><label class="text-xs text-slate-400">પૂરું નામ *</label>
+          <input class="kn-input" x-model="form.full_name"></div>
+        <div><label class="text-xs text-slate-400">ગુજરાતી નામ</label>
+          <input class="kn-input" x-model="form.name_gu"></div>
+        <div><label class="text-xs text-slate-400">બોલાવવાનું નામ</label>
+          <input class="kn-input" x-model="form.call_name" placeholder="રમેશભાઈ"></div>
+        <div><label class="text-xs text-slate-400">ફોન</label>
+          <input class="kn-input" x-model="form.phone"></div>
+        <div><label class="text-xs text-slate-400">કંપની</label>
+          <input class="kn-input" x-model="form.company"></div>
+        <div><label class="text-xs text-slate-400">સંબંધ</label>
+          <select class="kn-input" x-model="form.relation_type">
+            <option value="visitor">મુલાકાતી</option><option value="staff">સ્ટાફ</option>
+            <option value="admin">એડમિન</option><option value="vip">VIP</option>
+            <option value="vendor">વેન્ડર</option><option value="blacklist">બ્લેકલિસ્ટ</option>
+          </select></div>
+        <div><label class="text-xs text-slate-400">પસંદનું પીણું</label>
+          <select class="kn-input" x-model="form.preferred_drink">
+            <option value="">—</option><option value="chai">ચા</option>
+            <option value="coffee">કોફી</option><option value="water">પાણી</option>
+            <option value="none">કંઈ નહીં</option>
+          </select></div>
+      </div>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" x-model="form.greeting_enabled"> સ્વાગત બોલવું (Phase 2)
+      </label>
+      <div>
+        <label class="text-xs text-slate-400">
+          ચહેરાના ફોટા (3–5 સારા: સામે, ડાબે, જમણે, ચશ્માં સાથે/વગર)</label>
+        <input type="file" accept="image/*" multiple class="kn-input" x-ref="photos">
+      </div>
+      <div class="flex gap-2 justify-end">
+        <button class="kn-btn kn-btn-ghost" @click="modal=false">રદ કરો</button>
+        <button class="kn-btn kn-btn-gold" @click="save()" :disabled="saving"
+                x-text="saving ? 'સેવ થાય છે…' : 'સેવ કરો'"></button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+function people() {
+  const empty = () => ({ id: null, full_name: "", name_gu: "", call_name: "",
+    phone: "", company: "", relation_type: "visitor", preferred_drink: "",
+    greeting_enabled: true });
+  return {
+    persons: [], modal: false, form: empty(), saving: false,
+    async init() {
+      await KN.init("people.html");
+      this.refresh();
+    },
+    async refresh() {
+      this.persons = await KN.api("/api/persons").catch(() => []);
+    },
+    openAdd() { this.form = empty(); this.modal = true; },
+    openEdit(p) { this.form = Object.assign(empty(), p); this.modal = true; },
+    async save() {
+      if (!this.form.full_name) { KN.toast("નામ લખો", "error"); return; }
+      this.saving = true;
+      try {
+        const files = this.$refs.photos.files;
+        if (this.form.id) {
+          await KN.api(`/api/persons/${this.form.id}`, { method: "PUT", json: {
+            full_name: this.form.full_name, name_gu: this.form.name_gu || null,
+            call_name: this.form.call_name || null, phone: this.form.phone || null,
+            company: this.form.company || null, relation_type: this.form.relation_type,
+            preferred_drink: this.form.preferred_drink || null,
+            greeting_enabled: !!this.form.greeting_enabled,
+            is_admin: this.form.relation_type === "admin",
+          }});
+          if (files.length) {
+            const fd = new FormData();
+            for (const f of files) fd.append("photos", f);
+            const r = await KN.api(`/api/persons/${this.form.id}/faces`,
+              { method: "POST", body: fd });
+            (r.warnings || []).forEach(w => KN.toast(w, "error", 5000));
+          }
+        } else {
+          const fd = new FormData();
+          for (const [k, v] of Object.entries(this.form))
+            if (k !== "id" && v !== null && v !== "") fd.append(k, v);
+          for (const f of files) fd.append("photos", f);
+          const r = await KN.api("/api/persons", { method: "POST", body: fd });
+          (r.warnings || []).forEach(w => KN.toast(w, "error", 5000));
+          if (files.length && !r.faces_added)
+            KN.toast("ચેતવણી: કોઈ ફોટામાં ચહેરો મળ્યો નહીં", "error", 5000);
+        }
+        KN.toast("સેવ થઈ ગયું ✓", "ok");
+        this.modal = false;
+        this.refresh();
+      } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+      this.saving = false;
+    },
+    async delPerson(p) {
+      if (!confirm(`${p.full_name} — બધો ડેટા (ફોટા, મુલાકાત) કાયમ માટે કાઢી નાખવો?`)) return;
+      try {
+        await KN.api(`/api/persons/${p.id}`, { method: "DELETE" });
+        KN.toast("કાઢી નાખ્યું", "ok");
+        this.refresh();
+      } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+    },
+  };
+}
+</script>
+</body>
+</html>

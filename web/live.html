@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>કૃષ્ણ નેત્ર — લાઈવ</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Gujarati:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/app.js"></script>
+</head>
+<body class="gujarati">
+<div id="kn-header"></div>
+
+<main class="max-w-6xl mx-auto px-3 py-4 space-y-4" x-data="live()" x-init="init()">
+
+  <div class="kn-card p-4">
+    <div class="flex flex-wrap items-center gap-3 mb-3">
+      <h1 class="font-bold text-lg">📹 લાઈવ કેમેરા</h1>
+      <select class="kn-input !w-auto" x-model.number="camId">
+        <template x-for="c in cameras" :key="c.id">
+          <option :value="c.id" x-text="c.name + (c.status==='online' ? ' 🟢' : ' 🔴')"></option>
+        </template>
+      </select>
+    </div>
+    <img :src="camId ? '/stream/'+camId+'?t='+bust : ''"
+         class="w-full rounded-lg bg-slate-900" style="max-height:70vh;object-fit:contain">
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="kn-card p-4 space-y-3">
+      <h2 class="font-bold">🎙️ માઇક</h2>
+      <div class="h-4 rounded-full overflow-hidden" style="background:#0f172a">
+        <div class="h-full transition-all" style="background:linear-gradient(90deg,#1E88A8,#D4A017)"
+             :style="'width:'+micLevel+'%'"></div>
+      </div>
+      <div class="text-sm text-slate-400">
+        છેલ્લું સાંભળેલું: <span class="text-slate-200">— (Phase 2 માં આવશે)</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <button class="kn-btn kn-btn-ghost" @click="setState('mute_mic')">🔇 માઇક બંધ</button>
+        <button class="kn-btn kn-btn-ghost" @click="setState('mute_speaker')">🔊 સ્પીકર બંધ</button>
+        <button class="kn-btn kn-btn-ghost" @click="setState('paused')">⏸ થોભાવો</button>
+        <button class="kn-btn" @click="setState('active')">▶ ચાલુ કરો</button>
+      </div>
+    </div>
+
+    <div class="kn-card p-4 space-y-3">
+      <h2 class="font-bold">⌨️ કમાન્ડ લખો</h2>
+      <p class="text-xs text-slate-500">બોલવાને બદલે લખો — એજન્ટ Phase 3 માં જવાબ આપશે.</p>
+      <form @submit.prevent="sendCommand" class="flex gap-2">
+        <input class="kn-input" placeholder="દા.ત. બે ચા મંગાવ" x-model="cmd">
+        <button class="kn-btn kn-btn-gold shrink-0">મોકલો</button>
+      </form>
+      <h2 class="font-bold pt-2">👁️ તાજી ઓળખ</h2>
+      <div class="space-y-1.5 max-h-48 overflow-y-auto text-sm">
+        <template x-for="(e,i) in sightings" :key="i">
+          <div class="flex gap-2 border-b border-slate-800 pb-1">
+            <span x-text="e.icon"></span><span class="flex-1" x-text="e.text"></span>
+            <span class="text-xs text-slate-500" x-text="e.time"></span>
+          </div>
+        </template>
+        <div class="text-slate-500" x-show="!sightings.length">હજી કંઈ નથી</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+function live() {
+  return {
+    cameras: [], camId: null, bust: Date.now(), micLevel: 0,
+    cmd: "", sightings: [],
+    async init() {
+      await KN.init("live.html");
+      this.cameras = await KN.api("/api/cameras").catch(() => []);
+      const on = this.cameras.find(c => c.enabled);
+      this.camId = on ? on.id : null;
+      KN.on("mic.level", d => { this.micLevel = d.level || 0; });
+      KN.on("face.recognized", d => this.log("🟢", `${d.name} ઓળખાયા (${Math.round((d.confidence||0)*100)}%)`));
+      KN.on("face.uncertain", d => this.log("🟡", `કદાચ ${d.name}? (${Math.round((d.confidence||0)*100)}%)`));
+      KN.on("face.unknown", d => this.log("🔴", `અજાણ્યો ચહેરો ${d.temp_uid}`));
+    },
+    log(icon, text) {
+      this.sightings.unshift({ icon, text, time: new Date().toLocaleTimeString("gu-IN",
+        { hour: "2-digit", minute: "2-digit" }) });
+      this.sightings = this.sightings.slice(0, 30);
+    },
+    async setState(state) {
+      try {
+        await KN.api("/api/system/state", { method: "POST", json: { state } });
+        KN.setPauseButton(state);
+        KN.toast("સ્ટેટ બદલાયો: " + state, "ok");
+      } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+    },
+    sendCommand() {
+      if (!this.cmd) return;
+      KN.toast("એજન્ટ Phase 3 માં આવશે — હમણાં કમાન્ડ ચાલતા નથી", "info", 4000);
+      this.cmd = "";
+    },
+  };
+}
+</script>
+</body>
+</html>

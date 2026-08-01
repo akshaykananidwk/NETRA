@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>કૃષ્ણ નેત્ર — સેટિંગ્સ</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Gujarati:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/app.js"></script>
+</head>
+<body class="gujarati">
+<div id="kn-header"></div>
+
+<main class="max-w-6xl mx-auto px-3 py-4 space-y-4" x-data="settingsPage()" x-init="init()">
+
+  <h1 class="font-bold text-lg">⚙️ સેટિંગ્સ</h1>
+
+  <!-- cameras -->
+  <div class="kn-card p-4 space-y-3">
+    <h2 class="font-bold">📹 કેમેરા</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead><tr class="text-left text-slate-400 border-b border-slate-800">
+          <th class="p-2">નામ</th><th class="p-2">પ્રકાર</th><th class="p-2">સોર્સ</th>
+          <th class="p-2">સ્થિતિ</th><th class="p-2">ચાલુ</th><th class="p-2"></th>
+        </tr></thead>
+        <tbody>
+          <template x-for="c in cameras" :key="c.id">
+            <tr class="border-b border-slate-800/60">
+              <td class="p-2 font-semibold" x-text="c.name"></td>
+              <td class="p-2" x-text="c.source_type"></td>
+              <td class="p-2 font-mono text-xs" x-text="c.source_url"></td>
+              <td class="p-2" x-text="c.status==='online' ? '🟢' : '🔴'"></td>
+              <td class="p-2">
+                <input type="checkbox" :checked="c.enabled" @change="toggleCam(c, $event)">
+              </td>
+              <td class="p-2">
+                <button class="kn-btn kn-btn-ghost !px-2 !py-1 text-xs" @click="delCam(c)">🗑️</button>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+      <div><label class="text-xs text-slate-400">નામ</label>
+        <input class="kn-input" x-model="newCam.name" placeholder="Reception"></div>
+      <div><label class="text-xs text-slate-400">પ્રકાર</label>
+        <select class="kn-input" x-model="newCam.source_type">
+          <option value="webcam">webcam</option><option value="rtsp">rtsp</option>
+        </select></div>
+      <div class="col-span-2"><label class="text-xs text-slate-400">સોર્સ (0 અથવા rtsp://…)</label>
+        <input class="kn-input" x-model="newCam.source_url"></div>
+      <button class="kn-btn" @click="addCam()">+ ઉમેરો</button>
+    </div>
+  </div>
+
+  <!-- thresholds -->
+  <div class="kn-card p-4 space-y-3">
+    <h2 class="font-bold">🎚️ ઓળખ સેટિંગ્સ</h2>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <template x-for="f in fields" :key="f.key">
+        <div>
+          <label class="text-xs text-slate-400" x-text="f.label"></label>
+          <input class="kn-input" x-model="values[f.key]">
+        </div>
+      </template>
+    </div>
+    <button class="kn-btn kn-btn-gold" @click="save()">સેવ કરો</button>
+    <p class="text-xs text-slate-500">થ્રેશોલ્ડ તરત લાગુ થાય છે; FPS ફેરફાર માટે કેમેરા restart થાય તે સારું.</p>
+  </div>
+
+  <!-- health -->
+  <div class="kn-card p-4">
+    <h2 class="font-bold mb-2">🩺 સિસ્ટમ હેલ્થ</h2>
+    <div class="space-y-1 text-sm">
+      <template x-for="h in health" :key="h.component">
+        <div class="flex gap-2">
+          <span x-text="h.status==='ok' ? '🟢' : h.status==='muted'||h.status==='degraded' ? '🟡' : '🔴'"></span>
+          <span class="font-mono" x-text="h.component"></span>
+          <span class="text-slate-400 truncate" x-text="h.detail"></span>
+          <span class="text-xs text-slate-600 ml-auto" x-text="h.updated_at"></span>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <div class="kn-card p-4 text-xs text-slate-400 leading-relaxed">
+    ⚖️ <b>DPDP નોંધ:</b> ઓફિસમાં દેખાય તેમ બોર્ડ લગાવો —
+    <span class="text-slate-200">"આ સ્થળે CCTV અને AI રેકોર્ડિંગ ચાલુ છે"</span>.
+    બધો બાયોમેટ્રિક ડેટા ફક્ત આ મશીન પર જ રહે છે.
+  </div>
+</main>
+
+<script>
+function settingsPage() {
+  return {
+    cameras: [], values: {}, health: [],
+    newCam: { name: "", source_type: "webcam", source_url: "0" },
+    fields: [
+      { key: "face_match_threshold", label: "ઓળખ થ્રેશોલ્ડ (0.55)" },
+      { key: "face_uncertain_threshold", label: "શંકા થ્રેશોલ્ડ (0.40)" },
+      { key: "det_score_min", label: "ડિટેક્શન ક્વોલિટી (0.65)" },
+      { key: "min_face_size", label: "નાનામાં નાનો ચહેરો px (80)" },
+      { key: "detection_fps", label: "ડિટેક્શન FPS (5)" },
+      { key: "max_yaw_deg", label: "મહત્તમ ચહેરો ફેરવેલો ° (45)" },
+      { key: "greet_cooldown_hours", label: "સ્વાગત ગેપ કલાક (4)" },
+      { key: "unknown_ask_max_per_day", label: "અજાણ્યાને પૂછવું/દિવસ (2)" },
+      { key: "visit_merge_minutes", label: "મુલાકાત મર્જ મિનિટ (10)" },
+      { key: "stream_fps", label: "સ્ટ્રીમ FPS (10)" },
+      { key: "snapshot_retention_days", label: "ફોટા રાખવા દિવસ (90)" },
+      { key: "unknown_dedupe_threshold", label: "અજાણ્યા મેચ થ્રેશોલ્ડ (0.50)" },
+    ],
+    async init() {
+      await KN.init("settings.html");
+      this.refresh();
+    },
+    async refresh() {
+      this.cameras = await KN.api("/api/cameras").catch(() => []);
+      const s = await KN.api("/api/settings").catch(() => ({ editable: {} }));
+      this.values = Object.fromEntries(
+        Object.entries(s.editable).map(([k, v]) => [k, String(v)]));
+      this.health = await KN.api("/api/system/health").catch(() => []);
+    },
+    async save() {
+      try {
+        const r = await KN.api("/api/settings", { method: "POST",
+          json: { values: this.values } });
+        const bad = Object.keys(r.rejected || {});
+        if (bad.length) KN.toast("ખોટાં મૂલ્ય: " + bad.join(", "), "error");
+        else KN.toast("સેટિંગ્સ સેવ થઈ ✓", "ok");
+      } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+    },
+    async addCam() {
+      if (!this.newCam.name) { KN.toast("કેમેરાનું નામ લખો", "error"); return; }
+      try {
+        await KN.api("/api/cameras", { method: "POST", json: this.newCam });
+        this.newCam = { name: "", source_type: "webcam", source_url: "0" };
+        KN.toast("કેમેરો ઉમેરાયો ✓", "ok");
+        this.refresh();
+      } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+    },
+    async toggleCam(c, ev) {
+      try {
+        await KN.api(`/api/cameras/${c.id}`, { method: "PUT",
+          json: { enabled: ev.target.checked } });
+        this.refresh();
+      } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+    },
+    async delCam(c) {
+      if (!confirm(`કેમેરો "${c.name}" કાઢી નાખવો?`)) return;
+      try {
+        await KN.api(`/api/cameras/${c.id}`, { method: "DELETE" });
+        this.refresh();
+      } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+    },
+  };
+}
+</script>
+</body>
+</html>

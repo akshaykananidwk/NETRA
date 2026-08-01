@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>કૃષ્ણ નેત્ર — મુલાકાત</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Gujarati:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/app.js"></script>
+</head>
+<body class="gujarati">
+<div id="kn-header"></div>
+
+<main class="max-w-6xl mx-auto px-3 py-4 space-y-4" x-data="visits()" x-init="init()">
+
+  <div class="flex flex-wrap items-center gap-3">
+    <h1 class="font-bold text-lg">📒 મુલાકાત લોગ</h1>
+    <input type="date" class="kn-input !w-auto" x-model="date" @change="refresh()">
+    <select class="kn-input !w-auto" x-model="personId" @change="refresh()">
+      <option value="">— બધા લોકો —</option>
+      <template x-for="p in persons" :key="p.id">
+        <option :value="p.id" x-text="p.full_name"></option>
+      </template>
+    </select>
+    <a class="kn-btn kn-btn-ghost ml-auto" :href="csvUrl">⬇ CSV</a>
+  </div>
+
+  <div class="kn-card overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-slate-400 border-b border-slate-800">
+          <th class="p-3">ફોટો</th><th class="p-3">નામ</th><th class="p-3">સંબંધ</th>
+          <th class="p-3">કેમેરા</th><th class="p-3">આવ્યા</th><th class="p-3">છેલ્લે</th>
+          <th class="p-3">વિશ્વાસ</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="v in rows" :key="v.id">
+          <tr class="border-b border-slate-800/60">
+            <td class="p-2">
+              <img :src="KN.media(v.snapshot_path)" class="w-14 h-10 object-cover rounded bg-slate-800"
+                   onerror="this.style.opacity=.15">
+            </td>
+            <td class="p-3 font-semibold" x-text="v.name"></td>
+            <td class="p-3"><span class="kn-chip"
+              :style="v.status==='unknown' ? 'background:#7f1d1d55;color:#fca5a5'
+                                           : 'background:#1E88A833;color:#7dd3fc'"
+              x-text="KN.relationLabel(v.relation_type)"></span></td>
+            <td class="p-3 text-slate-400" x-text="v.camera"></td>
+            <td class="p-3 text-slate-300" x-text="fmt(v.first_seen)"></td>
+            <td class="p-3 text-slate-300" x-text="fmt(v.last_seen)"></td>
+            <td class="p-3 text-slate-400"
+                x-text="v.confidence ? Math.round(v.confidence*100)+'%' : '—'"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+    <div class="p-4 text-slate-500 text-sm" x-show="!rows.length">આ દિવસે કોઈ મુલાકાત નથી</div>
+  </div>
+</main>
+
+<script>
+function visits() {
+  return {
+    rows: [], persons: [], personId: "",
+    date: new Date().toLocaleDateString("en-CA"),
+    get csvUrl() {
+      const q = new URLSearchParams({ date: this.date });
+      if (this.personId) q.set("person_id", this.personId);
+      return "/api/visits/export.csv?" + q;
+    },
+    fmt(s) { return (s || "").slice(11, 16) || s; },
+    async init() {
+      await KN.init("visits.html");
+      this.persons = await KN.api("/api/persons").catch(() => []);
+      this.refresh();
+      ["face.recognized", "face.unknown"].forEach(t => KN.on(t, () => this.refresh()));
+    },
+    async refresh() {
+      const q = new URLSearchParams({ date: this.date });
+      if (this.personId) q.set("person_id", this.personId);
+      this.rows = await KN.api("/api/visits?" + q).catch(() => []);
+    },
+  };
+}
+</script>
+</body>
+</html>
