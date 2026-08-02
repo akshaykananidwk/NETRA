@@ -126,6 +126,17 @@ def _llm_health_loop() -> None:
                               for m in r.json().get("models", [])]
                     base = settings.ollama_model.split(":")[0]
                     if any(base in m for m in models):
+                        # empty-prompt generate = load model into RAM and
+                        # keep it there — first user command answers fast
+                        # instead of timing out on a minutes-long cold load
+                        try:
+                            _rq.post(settings.ollama_host.rstrip("/")
+                                     + "/api/generate",
+                                     json={"model": settings.ollama_model,
+                                           "keep_alive": "60m"},
+                                     timeout=settings.ollama_timeout_sec)
+                        except Exception:
+                            pass
                         set_health("llm", "ok",
                                    f"ollama સ્થાનિક: {settings.ollama_model} તૈયાર ✓")
                     else:

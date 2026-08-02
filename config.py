@@ -84,6 +84,7 @@ class Settings:
     ollama_host: str
     ollama_model: str
     llm_timeout_sec: float
+    ollama_timeout_sec: float
     # whatsapp
     wa_api_base: str
     wa_api_key: str
@@ -170,6 +171,8 @@ def _load() -> Settings:
         ollama_host=_s("OLLAMA_HOST", "http://localhost:11434"),
         ollama_model=_s("OLLAMA_MODEL", "qwen2.5:7b-instruct"),
         llm_timeout_sec=_f("LLM_TIMEOUT_SEC", 8),
+        # local model on CPU: first token after a cold load can take minutes
+        ollama_timeout_sec=_f("OLLAMA_TIMEOUT_SEC", 180),
         wa_api_base=_s("WA_API_BASE", "https://bulk.akdwk.in/api"),
         wa_api_key=_s("WA_API_KEY", ""),
         wa_device_id=_s("WA_DEVICE_ID", ""),

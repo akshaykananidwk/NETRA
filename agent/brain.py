@@ -161,13 +161,15 @@ class AgentBrain:
         tool_calls = []
 
         def _chat(msgs, with_tools):
+            # keep_alive keeps the model in RAM between commands; the long
+            # timeout covers the first cold load (minutes on a CPU-only PC)
             payload = {"model": settings.ollama_model, "stream": False,
-                       "messages": msgs}
+                       "messages": msgs, "keep_alive": "60m"}
             if with_tools:
                 payload["tools"] = self._ollama_tools()
             resp = _requests.post(
                 settings.ollama_host.rstrip("/") + "/api/chat",
-                json=payload, timeout=settings.llm_timeout_sec + 25)
+                json=payload, timeout=settings.ollama_timeout_sec)
             resp.raise_for_status()
             return resp.json()["message"]
 
