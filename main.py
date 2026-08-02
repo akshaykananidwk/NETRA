@@ -19,6 +19,26 @@ from config import ensure_dirs, settings
 BASE_DIR = Path(__file__).resolve().parent
 
 
+class _SafeConsoleHandler(logging.StreamHandler):
+    """Console handler that can never print '--- Logging error ---'.
+
+    Some Windows consoles reject Gujarati/emoji even after reconfigure();
+    fall back to replacement characters — the UTF-8 log file keeps the
+    full text either way."""
+
+    def emit(self, record):
+        try:
+            msg = self.format(record) + self.terminator
+            try:
+                self.stream.write(msg)
+            except UnicodeEncodeError:
+                enc = getattr(self.stream, "encoding", None) or "ascii"
+                self.stream.write(msg.encode(enc, "replace").decode(enc))
+            self.flush()
+        except Exception:
+            pass
+
+
 def _setup_logging() -> None:
     ensure_dirs()
     # Windows console defaults to cp1252 — Gujarati/emoji log lines would
@@ -29,6 +49,7 @@ def _setup_logging() -> None:
             stream.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
+    logging.raiseExceptions = False  # a log line must never crash-print
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
     root = logging.getLogger()
     if getattr(root, "_krishna_configured", False):
@@ -39,7 +60,7 @@ def _setup_logging() -> None:
                              maxBytes=10 * 1024 * 1024, backupCount=5,
                              encoding="utf-8")
     fh.setFormatter(fmt)
-    sh = logging.StreamHandler()
+    sh = _SafeConsoleHandler()
     sh.setFormatter(fmt)
     root.addHandler(fh)
     root.addHandler(sh)
@@ -47,6 +68,41 @@ def _setup_logging() -> None:
 
 _setup_logging()
 log = logging.getLogger("krishna.main")
+
+
+def _self_heal_packages() -> None:
+    """A half-installed huggingface_hub crashes with a circular import and
+    silently kills face recognition AND Whisper. Detect and reinstall it
+    before any worker imports it — no manual repair.bat needed."""
+    import importlib
+    import subprocess
+    import sys
+    try:
+        import huggingface_hub.utils  # noqa: F401
+        return
+    except Exception as e:
+        log.warning("huggingface_hub તૂટેલું છે — આપોઆપ repair ચાલુ… (%s)",
+                    str(e)[:120])
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--force-reinstall",
+             "--no-cache-dir", "huggingface_hub", "hf_xet"],
+            check=False, timeout=600)
+    except Exception:
+        log.exception("auto-repair run failed")
+    # drop the half-imported modules so the fresh install is picked up
+    for name in [m for m in list(sys.modules)
+                 if m == "huggingface_hub"
+                 or m.startswith("huggingface_hub.")]:
+        sys.modules.pop(name, None)
+    importlib.invalidate_caches()
+    try:
+        import huggingface_hub.utils  # noqa: F401
+        log.info("huggingface_hub repair સફળ ✓ (કેમેરા-ઓળખ + Whisper હવે "
+                 "લોડ થશે)")
+    except Exception:
+        log.error("auto-repair પછી પણ ભૂલ છે — server બંધ કરી repair.bat "
+                  "ચલાવો")
 
 
 def _llm_health_loop() -> None:
@@ -226,6 +282,7 @@ app.mount("/", StaticFiles(directory=BASE_DIR / "web", html=True), name="web")
 
 
 if __name__ == "__main__":
+    _self_heal_packages()
     import uvicorn
     uvicorn.run("main:app", host=settings.host, port=settings.port,
                 log_config=None)
