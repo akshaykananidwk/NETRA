@@ -21,6 +21,14 @@ BASE_DIR = Path(__file__).resolve().parent
 
 def _setup_logging() -> None:
     ensure_dirs()
+    # Windows console defaults to cp1252 — Gujarati/emoji log lines would
+    # raise "--- Logging error ---" without this
+    import sys
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
     root = logging.getLogger()
     if getattr(root, "_krishna_configured", False):
