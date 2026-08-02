@@ -175,3 +175,21 @@ def test_extract_rejects_zip_slip(app, tmp_path):
         z.writestr("../../escape.txt", "evil")
     with pytest.raises(UpdateError):
         m._extract(evil, tmp_path / "st")
+
+
+def test_requirements_change_writes_pip_flag(app, staged):
+    m = UpdateManager(app_root=app)
+    (app / "requirements.txt").write_text("fastapi==1.0\n")
+    (staged / "requirements.txt").write_text("fastapi==1.0\nnewpkg==2.0\n")
+    stats = m._apply(staged, m._incoming_files(staged))
+    assert stats["requirements_changed"] is True
+    assert (app / "data" / "needs_pip_install").exists()
+
+
+def test_unchanged_requirements_no_flag(app, staged):
+    m = UpdateManager(app_root=app)
+    (app / "requirements.txt").write_text("same\n")
+    (staged / "requirements.txt").write_text("same\n")
+    stats = m._apply(staged, m._incoming_files(staged))
+    assert stats["requirements_changed"] is False
+    assert not (app / "data" / "needs_pip_install").exists()

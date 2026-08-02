@@ -26,7 +26,19 @@ class ReminderEngine:
 
     # ── lifecycle ─────────────────────────────────────────────────────────
     def start(self) -> None:
-        from apscheduler.schedulers.background import BackgroundScheduler
+        try:
+            from apscheduler.schedulers.background import BackgroundScheduler
+        except ImportError as e:
+            # missing dependency must NEVER take the whole system down
+            log.error("apscheduler missing — reminders disabled (%s). "
+                      "Run install.bat to fix.", e)
+            try:
+                from core.db import set_health
+                set_health("reminders", "down",
+                           "apscheduler install નથી — install.bat ચલાવો")
+            except Exception:
+                pass
+            return
         self._scheduler = BackgroundScheduler(
             timezone=settings.timezone,
             job_defaults={"misfire_grace_time": 3600, "coalesce": True})

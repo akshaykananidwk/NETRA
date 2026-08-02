@@ -257,12 +257,16 @@ class UpdateManager:
 
     def _apply(self, tree: Path, files: List[str]) -> dict:
         updated, skipped, deferred = 0, 0, 0
+        requirements_changed = False
         for rel in files:
             if self.is_protected(rel):
                 skipped += 1
                 continue
             src = tree / rel
             dst = self.app_root / rel
+            if rel == "requirements.txt" and dst.exists() \
+                    and dst.read_bytes() != src.read_bytes():
+                requirements_changed = True
             if Path(rel).name.lower() in self.LIVE_BATCH and dst.exists():
                 new_content = src.read_bytes()
                 if dst.read_bytes() != new_content:
@@ -274,8 +278,14 @@ class UpdateManager:
             shutil.copyfile(src, tmp)
             os.replace(tmp, dst)          # atomic per-file
             updated += 1
+        if requirements_changed:
+            # start.bat installs new packages on the next boot before the app runs
+            flag = self.app_root / "data" / "needs_pip_install"
+            flag.parent.mkdir(parents=True, exist_ok=True)
+            flag.write_text(datetime.now().isoformat())
         return {"updated": updated, "protected_skipped": skipped,
-                "batch_deferred": deferred}
+                "batch_deferred": deferred,
+                "requirements_changed": requirements_changed}
 
     def _rollback_code(self, code_zip: Path) -> int:
         count = 0
@@ -391,6 +401,8 @@ class UpdateManager:
                       f"{stats['protected_skipped']} સુરક્ષિત skip")
             if stats["batch_deferred"]:
                 detail += f", {stats['batch_deferred']} .bat → .new"
+            if stats.get("requirements_changed"):
+                detail += " — નવાં packages restart પર install થશે"
             self._step("apply", "ok", detail)
 
             self._step("migrate", "run")

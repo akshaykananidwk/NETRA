@@ -67,8 +67,13 @@ async def lifespan(app: FastAPI):
     audio_worker.start()     # mic → health → VAD → STT
 
     from core.runtime import reminders, speaker_id, whatsapp
-    reminders.start()        # re-arms scheduled reminders from the DB
-    whatsapp.start_flusher() # delivers queued messages when back online
+    # one crashed component must not kill the system (reliability rule)
+    for name, fn in (("reminders", reminders.start),
+                     ("whatsapp-flusher", whatsapp.start_flusher)):
+        try:
+            fn()
+        except Exception:
+            log.exception("%s failed to start — continuing without it", name)
     threading.Thread(target=speaker_id.load, daemon=True,
                      name="speaker-id-load").start()
     set_health("db", "ok", "")

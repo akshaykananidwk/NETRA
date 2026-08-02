@@ -26,6 +26,12 @@ start "" /min powershell -NoProfile -WindowStyle Hidden -Command ^
  "for($i=0;$i -lt 60;$i++){try{Invoke-WebRequest -UseBasicParsing 'http://localhost:8000/api/system/status' -TimeoutSec 2|Out-Null; try{Start-Process chrome 'http://localhost:8000'}catch{Start-Process 'http://localhost:8000'}; break}catch{Start-Sleep 1}}"
 
 :loop
+rem a GitHub update that changed requirements.txt leaves this flag
+if exist "data\needs_pip_install" (
+    echo  New packages required after update - installing...
+    ".venv\Scripts\python.exe" -m pip install -r requirements.txt
+    if not errorlevel 1 del "data\needs_pip_install"
+)
 echo.
 echo  [%date% %time%]  Krishna Netra starting...
 ".venv\Scripts\python.exe" main.py
