@@ -75,6 +75,15 @@ class MicStream(threading.Thread):
                     import sounddevice as sd
                     device = (None if settings.mic_device_index < 0
                               else settings.mic_device_index)
+                    if not getattr(self, "_devices_logged", False):
+                        self._devices_logged = True
+                        try:
+                            for i, dv in enumerate(sd.query_devices()):
+                                if dv.get("max_input_channels", 0) > 0:
+                                    log.info("mic વિકલ્પ %d: %s", i,
+                                             dv.get("name", "?"))
+                        except Exception:
+                            pass
                     stream = sd.RawInputStream(
                         samplerate=settings.sample_rate, channels=1,
                         dtype="int16", device=device,
@@ -84,7 +93,15 @@ class MicStream(threading.Thread):
                     self._last_loud = time.time()
                     self.status = "ok"
                     self.detail = ""
-                    log.info("microphone stream open")
+                    try:
+                        used = sd.query_devices(
+                            device if device is not None
+                            else sd.default.device[0], "input")
+                        log.info("microphone stream open — વપરાય છે: %s "
+                                 "(બદલવા .env માં MIC_DEVICE_INDEX સેટ કરો)",
+                                 used.get("name", "?"))
+                    except Exception:
+                        log.info("microphone stream open")
                 except Exception as e:
                     stream = None
                     self.status = "down"

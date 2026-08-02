@@ -99,6 +99,8 @@ class Commander:
                     stored = None       # someone else spoke — re-resolve
                 speaker = stored
             else:
+                # make "hears but never answers" diagnosable from the log
+                log.info("wake word નથી — અવગણ્યું: %s", text[:80])
                 return
         if speaker is None:
             speaker = self.resolve_speaker(d)
