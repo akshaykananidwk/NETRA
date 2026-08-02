@@ -4,6 +4,12 @@ Run:  python main.py        (or: uvicorn main:app --host 0.0.0.0 --port 8000)
 """
 from __future__ import annotations
 
+import os
+
+# quiet ffmpeg's per-frame h264 warnings from flaky RTSP cameras
+# (must be set before OpenCV loads)
+os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "-8")
+
 import asyncio
 import logging
 import threading
@@ -64,6 +70,13 @@ def _setup_logging() -> None:
     sh.setFormatter(fmt)
     root.addHandler(fh)
     root.addHandler(sh)
+
+    # Windows proactor logs a harmless ConnectionResetError every time a
+    # browser drops a socket mid-close — pure noise, hide it
+    class _DropConnReset(logging.Filter):
+        def filter(self, record):
+            return "_call_connection_lost" not in record.getMessage()
+    logging.getLogger("asyncio").addFilter(_DropConnReset())
 
 
 _setup_logging()

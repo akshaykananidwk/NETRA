@@ -81,10 +81,15 @@ def update_camera(camera_id: int, body: CameraUpdate):
 
 @router.delete("/cameras/{camera_id}")
 def delete_camera(camera_id: int):
+    from core.db import Visit
     with SessionLocal() as s:
         cam = s.get(Camera, camera_id)
         if not cam:
             raise HTTPException(404, "camera not found")
+        # visits reference the camera (FK) — detach them so the delete
+        # succeeds while the visit history itself is kept
+        s.query(Visit).filter(Visit.camera_id == camera_id) \
+            .update({"camera_id": None})
         s.delete(cam)
         s.commit()
     from core.runtime import vision_manager

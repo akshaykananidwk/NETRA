@@ -52,3 +52,21 @@ def test_visit_and_unknown_face(session):
 def test_schema_is_idempotent(tmp_path):
     db.init_db(tmp_path / "twice.db")
     db.init_db(tmp_path / "twice.db")   # re-running must not fail
+
+
+def test_camera_delete_with_visits_detaches_them(session):
+    cam = db.Camera(name="ટેસ્ટ", source_type="webcam", source_url="0")
+    session.add(cam)
+    session.flush()
+    v = db.Visit(camera_id=cam.id, first_seen=db.now_local(),
+                 last_seen=db.now_local(), status="known")
+    session.add(v)
+    session.commit()
+    # same sequence the DELETE /api/cameras/{id} route runs
+    session.query(db.Visit).filter(db.Visit.camera_id == cam.id) \
+        .update({"camera_id": None})
+    session.delete(cam)
+    session.commit()
+    assert session.query(db.Camera).count() == 0
+    kept = session.query(db.Visit).one()
+    assert kept.camera_id is None
