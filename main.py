@@ -147,6 +147,24 @@ def _llm_health_loop() -> None:
         _time.sleep(120)
 
 
+def _tts_self_test() -> None:
+    """Synth a short phrase at startup so the Settings page shows the real
+    voice status right away — not 'no speech yet' until the first greeting.
+    The phrase lands in the disk cache, so later runs pass even offline."""
+    import asyncio as _aio
+
+    from core.db import set_health
+    from core.runtime import tts
+    try:
+        path = _aio.run(tts.synth("કૃષ્ણ નેત્ર તૈયાર છે"))
+        if path:
+            set_health("tts", "ok", f"{tts.last_engine} ✓")
+        else:
+            set_health("tts", "degraded", tts.last_error or "synth failed")
+    except Exception as e:
+        set_health("tts", "degraded", str(e)[:200])
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from core.db import apply_db_settings, init_db, seed_defaults, set_health
@@ -183,7 +201,9 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=speaker_id.load, daemon=True,
                      name="speaker-id-load").start()
     set_health("db", "ok", "")
-    set_health("tts", "degraded", "no speech yet")
+    set_health("tts", "degraded", "ટેસ્ટ ચાલુ છે…")
+    threading.Thread(target=_tts_self_test, daemon=True,
+                     name="tts-self-test").start()
     threading.Thread(target=_llm_health_loop, daemon=True,
                      name="llm-health").start()
     if not whatsapp.configured:
