@@ -132,7 +132,10 @@ async def lifespan(app: FastAPI):
                      name="llm-health").start()
     if not whatsapp.configured:
         set_health("whatsapp", "down", "WA_API_KEY સેટ નથી (.env)")
+    from config import get_lan_ip
     log.info("KRISHNA NETRA up — http://%s:%s", settings.host, settings.port)
+    log.info("📱 ફોન માટે (same Wi-Fi): http://%s:%s", get_lan_ip(),
+             settings.port)
 
     yield
 
@@ -216,6 +219,8 @@ app.mount("/media/snapshots", StaticFiles(directory=settings.snapshots_dir),
 app.mount("/media/faces", StaticFiles(directory=settings.faces_dir), name="faces")
 app.mount("/media/meetings", StaticFiles(directory=settings.meetings_dir),
           name="meetings")
+app.mount("/media/tts", StaticFiles(directory=settings.tts_cache_dir),
+          name="tts")
 # web UI last — catches everything else, serves index.html at /
 app.mount("/", StaticFiles(directory=BASE_DIR / "web", html=True), name="web")
 

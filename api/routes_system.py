@@ -54,9 +54,11 @@ def system_status():
     with SessionLocal() as s:
         wa_row = s.get(SystemHealth, "whatsapp")
         llm_row = s.get(SystemHealth, "llm")
+    from config import get_lan_ip
     return {
         "state": orchestrator.state.state,
         "uptime_sec": orchestrator.state.uptime_sec,
+        "lan_url": f"http://{get_lan_ip()}:{settings.port}",
         "whatsapp": ({"status": wa_row.status, "detail": wa_row.detail}
                      if wa_row else None),
         "llm": ({"status": llm_row.status, "detail": llm_row.detail}

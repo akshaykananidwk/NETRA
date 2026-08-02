@@ -50,14 +50,24 @@
     </div>
 
     <div class="kn-card p-4 space-y-3">
-      <h2 class="font-bold">⌨️ કૃષ્ણને લખીને કહો</h2>
-      <p class="text-xs text-slate-500">બોલવાને બદલે લખો — દા.ત. "બે ચા મંગાવ", "આજે કેટલા લોકો આવ્યા?"</p>
+      <h2 class="font-bold">🗣️ કૃષ્ણને કહો (લખીને કે બોલીને)</h2>
       <form @submit.prevent="sendCommand" class="flex gap-2">
         <input class="kn-input" placeholder="દા.ત. બે ચા મંગાવ" x-model="cmd"
                :disabled="cmdBusy">
+        <button type="button" class="kn-btn shrink-0 text-lg"
+                :class="recording ? 'kn-btn-red animate-pulse' : 'kn-btn-ghost'"
+                @click="toggleRecord()" :disabled="cmdBusy"
+                x-text="recording ? '⏹' : '🎙️'"></button>
         <button class="kn-btn kn-btn-gold shrink-0" :disabled="cmdBusy"
                 x-text="cmdBusy ? '…' : 'મોકલો'"></button>
       </form>
+      <p class="text-xs text-slate-500" x-show="!recording && !heard">
+        🎙️ દબાવી બોલો, ⏹ દબાવો એટલે કૃષ્ણ સાંભળીને જવાબ આપશે
+        (ફોનના માઇકથી પણ ચાલે).</p>
+      <p class="text-xs" style="color:#fbbf24" x-show="micHint" x-text="micHint"></p>
+      <div class="text-sm" x-show="heard" x-cloak>
+        🗣️ સંભળાયું: <span class="text-slate-300" x-text="heard"></span>
+      </div>
       <div x-show="cmdReply" x-cloak class="text-sm p-2 rounded kn-card"
            style="border-color:#1E88A855">
         🤖 <span x-text="cmdReply"></span>
@@ -83,6 +93,7 @@ function live() {
   return {
     cameras: [], camId: null, bust: Date.now(), micLevel: 0,
     cmd: "", cmdBusy: false, cmdReply: "", cmdMeta: "",
+    recording: false, recorder: null, heard: "", micHint: "",
     sightings: [], lastHeard: "", lastConf: null,
     async init() {
       await KN.init("live.html");
@@ -113,6 +124,49 @@ function live() {
         KN.setPauseButton(state);
         KN.toast("સ્ટેટ બદલાયો: " + state, "ok");
       } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+    },
+    async toggleRecord() {
+      if (this.recording) { this.recorder?.stop(); return; }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        this.micHint = "⚠️ ફોન browser માં mic ફક્ત https/localhost પર ચાલે. "
+          + "Chrome માં chrome://flags/#unsafely-treat-insecure-origin-as-secure "
+          + "ખોલી આ સરનામું (http://" + location.host + ") ઉમેરી Enable કરો, "
+          + "browser restart કરો. (PC પર localhost થી સીધું ચાલશે)";
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const chunks = [];
+        this.recorder = new MediaRecorder(stream);
+        this.recorder.ondataavailable = e => chunks.push(e.data);
+        this.recorder.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop());
+          this.recording = false;
+          const blob = new Blob(chunks, { type: this.recorder.mimeType });
+          await this.sendVoice(blob);
+        };
+        this.recorder.start();
+        this.recording = true;
+        this.heard = ""; this.cmdReply = ""; this.micHint = "";
+      } catch (e) {
+        this.micHint = "માઇકની પરવાનગી ન મળી: " + e.message;
+      }
+    },
+    async sendVoice(blob) {
+      this.cmdBusy = true;
+      try {
+        const fd = new FormData();
+        fd.append("audio", blob, "voice.webm");
+        const r = await KN.api("/api/agent/voice", { method: "POST", body: fd });
+        this.heard = r.heard;
+        this.cmdReply = r.reply;
+        this.cmdMeta = (r.tool_calls || []).map(t => t.name).join(", ")
+          + (r.tool_calls?.length ? " · " : "") + r.provider
+          + " · " + r.latency_ms + "ms";
+        this.log("🎙️", r.heard);
+        if (r.audio_url) new Audio(r.audio_url).play().catch(() => {});
+      } catch (e) { KN.toast(e.message, "error", 5000); }
+      this.cmdBusy = false;
     },
     async sendCommand() {
       if (!this.cmd || this.cmdBusy) return;

@@ -1,14 +1,35 @@
-"""Agent command box + WhatsApp send + voice-print enrollment."""
+"""Agent command box + phone voice + WhatsApp send + voice-print enrollment."""
 from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+import numpy as np
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 log = logging.getLogger("krishna.api.agent")
 router = APIRouter(prefix="/api")
+
+
+def decode_audio_to_pcm16k(data: bytes) -> bytes:
+    """Browser audio (webm/opus/ogg/mp4/wav) → raw 16 kHz mono int16 PCM.
+
+    Uses PyAV (already installed with faster-whisper)."""
+    import io
+
+    import av
+    from av.audio.resampler import AudioResampler
+
+    container = av.open(io.BytesIO(data))
+    resampler = AudioResampler(format="s16", layout="mono", rate=16000)
+    chunks = []
+    for frame in container.decode(audio=0):
+        for out in resampler.resample(frame):
+            chunks.append(bytes(out.planes[0]))
+    container.close()
+    return b"".join(chunks)
 
 
 class CommandIn(BaseModel):
@@ -25,6 +46,49 @@ async def agent_command(body: CommandIn):
     """Typed command — the web UI sits behind the admin login."""
     from core.runtime import commander
     return await commander.on_web_command(body.text)
+
+
+@router.post("/agent/voice")
+async def agent_voice(audio: UploadFile = File(...)):
+    """Phone-mic voice command: browser audio → Whisper → agent → TTS reply."""
+    from agent.commander import strip_wake_word
+    from core.runtime import commander, stt_worker, tts
+
+    if not stt_worker.ready:
+        raise HTTPException(
+            503, "કાન (Whisper) હજી તૈયાર નથી — Settings માં stt જુઓ")
+    data = await audio.read()
+    if len(data) < 200:
+        raise HTTPException(422, "ઓડિયો ખાલી છે")
+    try:
+        pcm = await asyncio.to_thread(decode_audio_to_pcm16k, data)
+    except Exception as e:
+        log.warning("audio decode failed: %s", str(e)[:150])
+        raise HTTPException(422, "ઓડિયો સમજાયો નહીં — ફરી પ્રયત્ન કરો")
+    if len(pcm) < 16000:                       # < 0.5 s
+        raise HTTPException(422, "બહુ ટૂંકું બોલાયું — ફરી બોલો")
+
+    text, confidence = await asyncio.to_thread(stt_worker.transcribe_bytes, pcm)
+    if not text:
+        raise HTTPException(422, "કંઈ સંભળાયું નહીં — ફરી બોલો")
+
+    # phone button is an explicit trigger — wake word optional
+    command = strip_wake_word(text)
+    if command is None:
+        command = text
+    result = await commander.on_web_command(command)
+
+    # reply audio so the phone speaks Krishna's answer
+    audio_url = None
+    try:
+        path = await tts.synth(result["reply"])
+        if path:
+            audio_url = f"/media/tts/{Path(path).name}"
+    except Exception:
+        log.exception("reply tts failed")
+
+    return {"heard": text, "confidence": confidence, **result,
+            "audio_url": audio_url}
 
 
 @router.post("/whatsapp/send")

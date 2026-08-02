@@ -193,6 +193,20 @@ def _load() -> Settings:
 settings = _load()
 
 
+def get_lan_ip() -> str:
+    """The PC's LAN IP — what the phone on the same Wi-Fi should open."""
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(1)
+        s.connect(("8.8.8.8", 80))       # no traffic sent — just picks the NIC
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except OSError:
+        return "127.0.0.1"
+
+
 def ensure_dirs() -> None:
     for p in (settings.data_dir, settings.faces_dir, settings.snapshots_dir,
               settings.models_dir, settings.logs_dir, settings.tts_cache_dir,

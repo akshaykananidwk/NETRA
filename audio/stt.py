@@ -32,6 +32,7 @@ class STTWorker(threading.Thread):
         self._queue: "queue.Queue[Optional[dict]]" = queue.Queue(maxsize=8)
         self._stop = threading.Event()
         self._model = None
+        self._model_lock = threading.Lock()
         self.ready = False
         self.error: Optional[str] = None
         self._prompt = OFFICE_WORDS
@@ -114,26 +115,39 @@ class STTWorker(threading.Thread):
             except Exception:
                 log.exception("transcription failed")
 
+    def _run_whisper(self, audio: np.ndarray) -> tuple:
+        """Shared inference path (worker queue + direct phone uploads)."""
+        with self._model_lock:
+            segments, _info = self._model.transcribe(
+                audio, language=settings.whisper_language, beam_size=1,
+                initial_prompt=self._initial_prompt(), vad_filter=False)
+            texts, logprobs = [], []
+            for seg in segments:
+                if seg.no_speech_prob is not None and seg.no_speech_prob > 0.8:
+                    continue
+                texts.append(seg.text.strip())
+                if seg.avg_logprob is not None:
+                    logprobs.append(seg.avg_logprob)
+        text = " ".join(t for t in texts if t).strip()
+        confidence = (round(min(math.exp(sum(logprobs) / len(logprobs)), 1.0), 3)
+                      if logprobs else None)
+        return text, confidence
+
+    def transcribe_bytes(self, pcm: bytes) -> tuple:
+        """Synchronous transcription of raw 16 kHz int16 PCM (web voice)."""
+        if not self.ready:
+            return "", None
+        audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+        return self._run_whisper(audio)
+
     def _transcribe(self, item: dict) -> None:
         pcm = item["pcm"]
         audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
         duration = len(audio) / settings.sample_rate
         t0 = time.time()
-        segments, _info = self._model.transcribe(
-            audio, language=settings.whisper_language, beam_size=1,
-            initial_prompt=self._initial_prompt(), vad_filter=False)
-        texts, logprobs = [], []
-        for seg in segments:
-            if seg.no_speech_prob is not None and seg.no_speech_prob > 0.8:
-                continue
-            texts.append(seg.text.strip())
-            if seg.avg_logprob is not None:
-                logprobs.append(seg.avg_logprob)
-        text = " ".join(t for t in texts if t).strip()
+        text, confidence = self._run_whisper(audio)
         if not text:
             return
-        confidence = (round(min(math.exp(sum(logprobs) / len(logprobs)), 1.0), 3)
-                      if logprobs else None)
         log.info("heard (%.1fs, %.0fms): %s", duration,
                  (time.time() - t0) * 1000, text)
 

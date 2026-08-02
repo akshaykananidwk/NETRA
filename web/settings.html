@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Gujarati:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/style.css">
 <script src="assets/app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body class="gujarati">
 <div id="kn-header"></div>
@@ -159,6 +160,20 @@
     <p class="text-xs text-slate-500">થ્રેશોલ્ડ તરત લાગુ થાય છે; FPS ફેરફાર માટે કેમેરા restart થાય તે સારું.</p>
   </div>
 
+  <!-- open on phone -->
+  <div class="kn-card p-4">
+    <h2 class="font-bold mb-2">📱 ફોનમાં ખોલો (same Wi-Fi)</h2>
+    <div class="flex items-center gap-6 flex-wrap">
+      <div>
+        <div class="text-2xl font-mono font-bold" style="color:#D4A017"
+             x-text="lanUrl || '…'"></div>
+        <p class="text-xs text-slate-500 mt-1">
+          ફોનના browser માં આ સરનામું લખો — અથવા બાજુનો QR scan કરો.</p>
+      </div>
+      <div id="lan-qr" class="bg-white p-2 rounded-lg"></div>
+    </div>
+  </div>
+
   <!-- daily collection (for "કૃષ્ણ, આજનું કલેક્શન કેટલું?") -->
   <div class="kn-card p-4 space-y-2">
     <h2 class="font-bold">💰 આજનું કલેક્શન</h2>
@@ -213,7 +228,7 @@
 function settingsPage() {
   return {
     cameras: [], values: {}, health: [],
-    saying: false, sayResult: null, collection: "",
+    saying: false, sayResult: null, collection: "", lanUrl: "",
     upd: { cfg: {}, repo: "", branch: "main", token: "", info: null,
            log: [], busy: null, restarting: false },
     newCam: { name: "", source_type: "webcam", source_url: "0" },
@@ -235,6 +250,13 @@ function settingsPage() {
       await KN.init("settings.html");
       this.refresh();
       this.updLoad();
+      try {
+        const st = await KN.api("/api/system/status");
+        this.lanUrl = st.lan_url || "";
+        if (this.lanUrl && window.QRCode)
+          new QRCode(document.getElementById("lan-qr"),
+                     { text: this.lanUrl, width: 110, height: 110 });
+      } catch (e) {}
       KN.on("update.progress", l => {
         this.upd.log.push(l);
         if (l.step === "restart") this.updWaitForRestart();
