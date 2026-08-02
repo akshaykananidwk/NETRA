@@ -6,7 +6,15 @@ visit, and (in later phases) greets people in Gujarati, listens to meetings
 and executes voice commands. **All recognition and storage runs on the local
 machine** — no cloud dependency.
 
-> **Current status: Phase 3 — "Brain"** ✅
+> **Current status: Phase 4 — "Meetings"** ✅
+> Meeting mode: continuous WAV recording, rolling transcript with ECAPA
+> speaker labels (voice-print names + SPK_n clustering), participants from
+> faces/voices, auto-end after idle, LLM summary → key points, decisions,
+> extracted tasks with auto-reminders (due −1 day, 10:00), WhatsApp summary
+> to the admin, and a live-transcript મીટિંગ page. Ollama now has full
+> function calling, so the brain works 100% locally.
+>
+> Previously — **Phase 3 — "Brain"** ✅
 > Everything from Phases 1–2 (face recognition, visit log, TTS greetings,
 > STT) **plus**: the LLM agent with all 15 tools and in-code permission
 > gates, wake word "કૃષ્ણ", WhatsApp tea ordering with an offline queue,
@@ -120,6 +128,34 @@ enrollment — next time they're recognised by name.
   → Ollama (`OLLAMA_HOST`) → a rule-based matcher covering the common
   commands (tea order, pause/resume, meetings, visitor log, collection,
   task list, reminders) — so the office never goes fully dead offline.
+- **100% local setup (no API key)**: install Ollama from
+  https://ollama.com/download, run `ollama pull qwen2.5:7b-instruct`
+  (or `qwen2.5:3b-instruct` on a weak PC + set `OLLAMA_MODEL`), then set
+  `LLM_PROVIDER=ollama` in `.env`. Ollama gets the full tool set via
+  function calling, so the local model can genuinely order tea, create
+  reminders, and answer reports — with the rule matcher as a shortcut for
+  the common commands.
+
+### Meetings (Phase 4)
+
+- Start: "કૃષ્ણ, મીટિંગ ચાલુ કર", the મીટિંગ page button, or
+  `POST /api/meetings/start`. An audible "મીટિંગ રેકોર્ડિંગ ચાલુ છે"
+  announcement plays (DPDP), and greetings pause — the agent stays silent
+  during the meeting unless the wake word is used.
+- While recording: continuous 16 kHz WAV → `data/meetings/{id}/audio.wav`;
+  the rolling Whisper pipeline stores every segment with a timestamp and a
+  speaker label — voice-print matches get the person's name, unknown voices
+  are clustered online into SPK_1, SPK_2… (needs speechbrain; without it
+  labels fall back to generic). Participants are recorded from faces seen
+  and voices matched. The મીટિંગ page shows the transcript live.
+- End: "મીટિંગ પૂરી કરી", the page button, or auto after
+  `MEETING_AUTO_END_MIN` minutes with no faces and no speech. The full
+  transcript goes to the LLM (Anthropic → Ollama) which returns JSON:
+  summary, key points, decisions, tasks, follow-ups. Tasks are inserted
+  (`source=meeting`), reminders auto-created at due −1 day 10:00, the
+  summary is WhatsApped to the admin, and Krishna announces
+  "મીટિંગ પૂરી થઈ. N ટાસ્ક બન્યા છે…". A failed summary never loses the
+  transcript.
 - **Permission gates enforced in code**: anyone can order tea; staff can
   manage tasks/reminders; only the admin gets collection, visitor logs,
   WhatsApp sending, registration, meetings, and system control. Admin is
@@ -224,7 +260,8 @@ tests run on synthetic embeddings.
 |---|---|
 | **1 — Eyes** ✅ | face recognition, visit log, live view, web UI |
 | **2 — Voice** ✅ | TTS greetings, VAD + Whisper STT, unknown-name flow, mic ducking |
-| **3 — Brain** ✅ | this release — wake word, LLM agent + tools, WhatsApp, tasks/reminders, login |
+| **3 — Brain** ✅ | wake word, LLM agent + tools, WhatsApp, tasks/reminders, login |
+| **4 — Meetings** ✅ | this release — recording, rolling transcript, speaker labels, summary → tasks |
 | 3 — Brain | wake word, admin voice print, LLM agent + tools, WhatsApp tea ordering, tasks/reminders |
 | 4 — Meetings | recorder, rolling transcript, speaker labels, summary + task extraction |
 | 5 — Office scale | multi-RTSP, anti-spoof, attendance, Cloudflare Tunnel, Windows service |

@@ -39,6 +39,8 @@ class AudioWorker(threading.Thread):
         self._lock = threading.Lock()
         self._record_buf: list = []
         self._record_until = 0.0
+        self._meeting_wav = None
+        self._meeting_lock = threading.Lock()
 
     # ── called by the Greeter (any thread) ────────────────────────────────
     def open_reply_window(self, seconds: float, context: Optional[dict] = None) -> None:
@@ -74,9 +76,32 @@ class AudioWorker(threading.Thread):
             self._record_until = 0.0
         return data
 
+    # ── meeting recording (continuous WAV alongside normal listening) ─────
+    def start_meeting_recording(self, path) -> bool:
+        import wave
+        with self._meeting_lock:
+            if self._meeting_wav is not None:
+                return False
+            wav = wave.open(str(path), "wb")
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(settings.sample_rate)
+            self._meeting_wav = wav
+        return True
+
+    def stop_meeting_recording(self) -> None:
+        with self._meeting_lock:
+            if self._meeting_wav is not None:
+                try:
+                    self._meeting_wav.close()
+                except Exception:
+                    log.exception("meeting wav close failed")
+                self._meeting_wav = None
+
     def stop(self) -> None:
         self._stop.set()
         self.mic.stop()
+        self.stop_meeting_recording()
 
     # ── thread ────────────────────────────────────────────────────────────
     def run(self) -> None:
@@ -96,6 +121,13 @@ class AudioWorker(threading.Thread):
 
             if frame is None:
                 continue
+            with self._meeting_lock:
+                if self._meeting_wav is not None:
+                    try:
+                        self._meeting_wav.writeframes(frame)
+                    except Exception:
+                        log.exception("meeting wav write failed")
+                        self._meeting_wav = None
             with self._lock:
                 recording = time.time() < self._record_until
                 if recording:

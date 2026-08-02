@@ -47,7 +47,8 @@
       const nav = [
         ["index.html", "ડેશબોર્ડ"], ["live.html", "લાઈવ"],
         ["people.html", "લોકો"], ["visits.html", "મુલાકાત"],
-        ["tasks.html", "કામ"], ["settings.html", "સેટિંગ્સ"],
+        ["meetings.html", "મીટિંગ"], ["tasks.html", "કામ"],
+        ["settings.html", "સેટિંગ્સ"],
       ];
       const el = document.getElementById("kn-header");
       if (!el) return;

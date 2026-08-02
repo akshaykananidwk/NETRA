@@ -140,13 +140,17 @@ class STTWorker(threading.Thread):
         speaker_fields = {}
         if self.speaker_id is not None and self.speaker_id.ready:
             try:
-                match = self.speaker_id.identify(pcm)
-                if match:
-                    pid, name, is_admin, score = match
-                    speaker_fields = {"speaker_person_id": pid,
-                                      "speaker_name": name,
-                                      "speaker_is_admin": is_admin,
-                                      "speaker_score": round(score, 3)}
+                emb = self.speaker_id.embed(pcm)
+                if emb is not None:
+                    # raw embedding rides along for meeting speaker labelling
+                    speaker_fields["speaker_emb"] = emb.tobytes()
+                    match = self.speaker_id.identify_emb(emb)
+                    if match:
+                        pid, name, is_admin, score = match
+                        speaker_fields.update(
+                            {"speaker_person_id": pid, "speaker_name": name,
+                             "speaker_is_admin": is_admin,
+                             "speaker_score": round(score, 3)})
             except Exception:
                 log.exception("speaker identify failed")
 

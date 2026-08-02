@@ -132,9 +132,18 @@ class AgentBrain:
             return tool_calls[-1]["result"], tool_calls
         return FALLBACK_REPLY, tool_calls
 
-    # ── ollama (no tool use — commands go through rules first) ────────────
+    # ── ollama (local, with function calling — qwen2.5 etc.) ─────────────
+    @staticmethod
+    def _ollama_tools() -> list:
+        return [{"type": "function",
+                 "function": {"name": t["name"],
+                              "description": t["description"],
+                              "parameters": t["input_schema"]}}
+                for t in TOOLS]
+
     async def _run_ollama(self, text: str, speaker: dict) -> tuple:
-        # try the rule matcher first so common commands still DO things
+        # rules first: instant + reliable for the common commands, and it
+        # spares the local model a round trip
         matched = match_intent(text)
         if matched:
             name, tool_input = matched
@@ -143,21 +152,57 @@ class AgentBrain:
             return result, [{"name": name, "input": tool_input,
                              "result": result}]
 
-        def _call():
+        key = self.memory.key_for(speaker, "voice")
+        messages = [{"role": "system",
+                     "content": PERSONA + "\n\n"
+                     + build_context(speaker, self.orchestrator)}]
+        messages += self.memory.messages(key)
+        messages.append({"role": "user", "content": text})
+        tool_calls = []
+
+        def _chat(msgs, with_tools):
+            payload = {"model": settings.ollama_model, "stream": False,
+                       "messages": msgs}
+            if with_tools:
+                payload["tools"] = self._ollama_tools()
             resp = _requests.post(
                 settings.ollama_host.rstrip("/") + "/api/chat",
-                json={"model": settings.ollama_model, "stream": False,
-                      "messages": [
-                          {"role": "system",
-                           "content": PERSONA + "\n\n"
-                           + build_context(speaker, self.orchestrator)},
-                          {"role": "user", "content": text}]},
-                timeout=settings.llm_timeout_sec + 10)
+                json=payload, timeout=settings.llm_timeout_sec + 25)
             resp.raise_for_status()
-            return resp.json()["message"]["content"].strip()
+            return resp.json()["message"]
 
-        reply = await asyncio.to_thread(_call)
-        return (reply or FALLBACK_REPLY), []
+        use_tools = True
+        for _round in range(MAX_TOOL_ROUNDS):
+            try:
+                message = await asyncio.to_thread(_chat, messages, use_tools)
+            except _requests.HTTPError:
+                if not use_tools:
+                    raise
+                use_tools = False        # model without tool support
+                continue
+            calls = message.get("tool_calls") or []
+            if not calls:
+                reply = (message.get("content") or "").strip()
+                return (reply or FALLBACK_REPLY), tool_calls
+            messages.append(message)
+            for call in calls:
+                fn = call.get("function", {})
+                name = fn.get("name", "")
+                args = fn.get("arguments") or {}
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except ValueError:
+                        args = {}
+                result = await asyncio.to_thread(self.executor.execute,
+                                                 name, args, speaker)
+                tool_calls.append({"name": name, "input": args,
+                                   "result": result})
+                messages.append({"role": "tool", "content": result})
+
+        if tool_calls:
+            return tool_calls[-1]["result"], tool_calls
+        return FALLBACK_REPLY, tool_calls
 
     # ── rules (final fallback) ────────────────────────────────────────────
     def _run_rules(self, text: str, speaker: dict) -> tuple:

@@ -145,13 +145,15 @@ async def login(request: Request):
     return resp
 
 
-from api import routes_agent, routes_cameras, routes_persons, routes_stream, \
-    routes_system, routes_tasks, routes_update, routes_visits, ws  # noqa: E402
+from api import routes_agent, routes_cameras, routes_meetings, \
+    routes_persons, routes_stream, routes_system, routes_tasks, \
+    routes_update, routes_visits, ws  # noqa: E402
 
 app.include_router(routes_system.router)
 app.include_router(routes_update.router)
 app.include_router(routes_tasks.router)
 app.include_router(routes_agent.router)
+app.include_router(routes_meetings.router)
 app.include_router(routes_persons.router)
 app.include_router(routes_visits.router)
 app.include_router(routes_cameras.router)
@@ -163,6 +165,8 @@ ensure_dirs()
 app.mount("/media/snapshots", StaticFiles(directory=settings.snapshots_dir),
           name="snapshots")
 app.mount("/media/faces", StaticFiles(directory=settings.faces_dir), name="faces")
+app.mount("/media/meetings", StaticFiles(directory=settings.meetings_dir),
+          name="meetings")
 # web UI last — catches everything else, serves index.html at /
 app.mount("/", StaticFiles(directory=BASE_DIR / "web", html=True), name="web")
 

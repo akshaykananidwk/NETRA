@@ -94,6 +94,9 @@ class Settings:
     wa_timeout_sec: float
     # security
     admin_password: str
+    # meetings
+    meeting_auto_end_min: float
+    meetings_dir: Path
     # data
     snapshot_retention_days: int
     db_path: Path
@@ -175,6 +178,8 @@ def _load() -> Settings:
         wa_admin_number=_s("WA_ADMIN_NUMBER", ""),
         wa_timeout_sec=_f("WA_TIMEOUT_SEC", 10),
         admin_password=_s("ADMIN_PASSWORD", ""),
+        meeting_auto_end_min=_f("MEETING_AUTO_END_MIN", 5),
+        meetings_dir=data_dir / "meetings",
         snapshot_retention_days=_i("SNAPSHOT_RETENTION_DAYS", 90),
         db_path=db_path,
         data_dir=data_dir,
@@ -191,5 +196,5 @@ settings = _load()
 def ensure_dirs() -> None:
     for p in (settings.data_dir, settings.faces_dir, settings.snapshots_dir,
               settings.models_dir, settings.logs_dir, settings.tts_cache_dir,
-              settings.data_dir / "backups"):
+              settings.meetings_dir, settings.data_dir / "backups"):
         p.mkdir(parents=True, exist_ok=True)

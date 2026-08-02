@@ -188,11 +188,31 @@ class _OrderIn(BaseModel):
 class ToolExecutor:
     """Executes tools with role enforcement. Dependencies injected lazily."""
 
-    def __init__(self, whatsapp=None, reminders=None, state=None) -> None:
+    def __init__(self, whatsapp=None, reminders=None, state=None,
+                 meetings=None) -> None:
         self.whatsapp = whatsapp
         self.reminders = reminders
         self.state = state
+        self.meetings = meetings        # MeetingManager (set after runtime wiring)
         self._resume_timer = None
+
+    def _run_async(self, coro, timeout: float = 20) -> Optional[str]:
+        """Run a coroutine on the main loop from this worker thread."""
+        import asyncio
+        try:
+            from core.runtime import bus
+            loop = bus._loop
+            if loop is None or loop.is_closed():
+                coro.close()
+                return None
+            return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout)
+        except Exception:
+            log.exception("async tool bridge failed")
+            try:
+                coro.close()
+            except Exception:
+                pass
+            return None
 
     # ── entry point ───────────────────────────────────────────────────────
     def execute(self, name: str, tool_input: dict, speaker: dict) -> str:
@@ -336,20 +356,29 @@ class ToolExecutor:
         return f"{date} નું કલેક્શન: ₹{row.value}."
 
     def _t_start_meeting(self, tool_input: dict, speaker: dict) -> str:
+        if self.meetings is not None:
+            out = self._run_async(
+                self.meetings.start(tool_input.get("title")))
+            if out is not None:
+                return out
+        # fallback: bare DB row (no recording pipeline available)
         with SessionLocal() as s:
             running = (s.query(Meeting)
                         .filter(Meeting.status == "recording").first())
             if running:
                 return "મીટિંગ પહેલેથી ચાલુ છે."
-            m = Meeting(title=tool_input.get("title") or
-                        f"મીટિંગ {now_local().strftime('%d-%m %H:%M')}",
-                        started_at=now_local(), status="recording")
-            s.add(m)
+            s.add(Meeting(title=tool_input.get("title") or
+                          f"મીટિંગ {now_local().strftime('%d-%m %H:%M')}",
+                          started_at=now_local(), status="recording"))
             s.commit()
-        return ("મીટિંગ નોંધવાનું ચાલુ કર્યું છે. મીટિંગ રેકોર્ડિંગ ચાલુ છે. "
-                "(ટ્રાન્સક્રિપ્ટ Phase 4 માં આવશે)")
+        return "મીટિંગ નોંધવાનું ચાલુ કર્યું છે. મીટિંગ રેકોર્ડિંગ ચાલુ છે."
 
     def _t_end_meeting(self, tool_input: dict, speaker: dict) -> str:
+        if self.meetings is not None and self.meetings.active:
+            out = self._run_async(
+                self.meetings.end(tool_input.get("meeting_id")))
+            if out is not None:
+                return out
         with SessionLocal() as s:
             m = None
             if tool_input.get("meeting_id"):

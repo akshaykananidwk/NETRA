@@ -167,3 +167,39 @@ def test_web_command_is_admin(brain):
     # admin-only tool answered (not the permission-denied message)
     from agent.tools import DENIED_MSG
     assert result["reply"] != DENIED_MSG
+
+
+def test_ollama_tool_calling_loop(brain, monkeypatch):
+    """Local model with function calling executes tools end-to-end."""
+    from config import settings
+    calls = {"n": 0}
+
+    class FakeResp:
+        def __init__(self, data):
+            self._data = data
+            self.status_code = 200
+        def raise_for_status(self):
+            pass
+        def json(self):
+            return self._data
+
+    def fake_post(url, json=None, timeout=None):
+        calls["n"] += 1
+        assert "tools" in json          # tool definitions passed to ollama
+        if calls["n"] == 1:
+            return FakeResp({"message": {
+                "role": "assistant", "content": "",
+                "tool_calls": [{"function": {
+                    "name": "order_refreshment",
+                    "arguments": {"items": [{"item": "chai", "qty": 2}]}}}]}})
+        return FakeResp({"message": {"role": "assistant",
+                                     "content": "ચા મંગાવી દીધી છે."}})
+
+    monkeypatch.setattr("agent.brain._requests.post", fake_post)
+    # bypass the rules shortcut so the LLM path is exercised
+    monkeypatch.setattr("agent.brain.match_intent", lambda t: None)
+    result = asyncio.run(brain.process("મહેમાન માટે કંઈક ગરમ મંગાવો", ADMIN))
+    assert result["provider"] == "ollama"
+    assert result["tool_calls"][0]["name"] == "order_refreshment"
+    assert brain._wa.sent                # WhatsApp really fired
+    assert "ચા" in result["reply"]

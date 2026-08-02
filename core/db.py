@@ -173,6 +173,27 @@ class Meeting(Base):
     status = Column(Text, default="recording")
 
 
+class MeetingParticipant(Base):
+    __tablename__ = "meeting_participants"
+    __mapper_args__ = {"primary_key": ["meeting_id", "person_id"]}
+    meeting_id = Column(Integer, ForeignKey("meetings.id", ondelete="CASCADE"),
+                        primary_key=True)
+    person_id = Column(Integer, ForeignKey("persons.id"), primary_key=True)
+    detected_by = Column(Text)
+
+
+class TranscriptSegment(Base):
+    __tablename__ = "transcript_segments"
+    id = Column(Integer, primary_key=True)
+    meeting_id = Column(Integer, ForeignKey("meetings.id", ondelete="CASCADE"))
+    speaker_label = Column(Text)
+    person_id = Column(Integer, ForeignKey("persons.id"))
+    start_ms = Column(Integer)
+    end_ms = Column(Integer)
+    text = Column(Text, nullable=False)
+    confidence = Column(Float)
+
+
 class Task(Base):
     __tablename__ = "tasks"
     id = Column(Integer, primary_key=True)

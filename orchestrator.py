@@ -38,6 +38,7 @@ class Orchestrator:
         self.last_transcript: Optional[dict] = None
         self.greeter = None
         self.commander = None
+        self.meetings = None
         self.last_admin_seen = 0.0
         self.last_admin_person_id: Optional[int] = None
         self.last_admin_name: Optional[str] = None
@@ -51,6 +52,14 @@ class Orchestrator:
     def attach_commander(self, commander) -> None:
         self.commander = commander
         commander.attach(self)
+
+    def attach_meetings(self, meetings) -> None:
+        self.meetings = meetings
+        meetings.orch = self
+
+    @property
+    def meeting_active(self) -> bool:
+        return self.meetings is not None and self.meetings.active
 
     def admin_recently_seen(self) -> bool:
         from config import settings as cfg
@@ -155,6 +164,8 @@ class Orchestrator:
             self.last_admin_seen = time.time()
             self.last_admin_person_id = d["person_id"]
             self.last_admin_name = info.get("call_name") or d.get("name")
+        if self.meetings is not None and self.meetings.active:
+            await self.meetings.on_face(d["person_id"])
         key = ("known", d["person_id"], d["camera_id"])
         if key in self._active:
             self._active[key]["name"] = info.get("call_name") or d.get("name")
@@ -305,7 +316,12 @@ class Orchestrator:
             self.last_admin_seen = time.time()
             self.last_admin_person_id = d.get("speaker_person_id")
             self.last_admin_name = d.get("speaker_name")
-        await self.hub.broadcast(ev.SPEECH_TRANSCRIBED, d)
+        # raw embedding bytes never go to browsers
+        public = {k: v for k, v in d.items() if k != "speaker_emb"}
+        await self.hub.broadcast(ev.SPEECH_TRANSCRIBED, public)
+        # meeting transcript recording (agent stays silent; wake word still works)
+        if self.meetings is not None and self.meetings.active:
+            await self.meetings.on_transcript(d)
         # name-capture flow takes priority over commands
         if self.greeter and self.greeter.awaiting is not None:
             await self.greeter.on_transcript(d)

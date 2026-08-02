@@ -107,6 +107,19 @@ class SpeakerID:
         self._admins = admins
         self._cache_at = time.time()
 
+    def identify_emb(self, emb: np.ndarray) -> Optional[Tuple[int, str, bool, float]]:
+        """Match a precomputed embedding. Returns (pid, name, is_admin, score)."""
+        self._refresh_cache()
+        if self._matrix.shape[0] == 0:
+            return None
+        sims = self._matrix @ emb
+        idx = int(np.argmax(sims))
+        score = float(sims[idx])
+        if score < settings.speaker_match_threshold:
+            return None
+        pid = self._person_ids[idx]
+        return pid, self._names.get(pid, ""), pid in self._admins, score
+
     def identify(self, pcm: bytes) -> Optional[Tuple[int, str, bool, float]]:
         """Returns (person_id, name, is_admin, score) or None."""
         emb = self.embed(pcm)

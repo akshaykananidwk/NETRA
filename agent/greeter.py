@@ -63,6 +63,8 @@ class Greeter:
     async def on_known(self, d: dict) -> None:
         if self.state.state != "active":
             return
+        if self.orch is not None and getattr(self.orch, "meeting_active", False):
+            return                      # agent stays silent during meetings
 
         def _check():
             with SessionLocal() as s:
@@ -111,6 +113,8 @@ class Greeter:
     async def on_unknown(self, d: dict) -> None:
         if self.state.state != "active" or self.awaiting is not None:
             return
+        if self.orch is not None and getattr(self.orch, "meeting_active", False):
+            return                      # agent stays silent during meetings
 
         def _check():
             with SessionLocal() as s:

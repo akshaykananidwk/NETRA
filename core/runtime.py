@@ -65,3 +65,11 @@ brain = AgentBrain(tool_executor, ConversationMemory(),
                    orchestrator=orchestrator)
 commander = Commander(brain, greeter, orchestrator.state)
 orchestrator.attach_commander(commander)
+
+from agent.meeting import MeetingManager  # noqa: E402
+
+meetings = MeetingManager(audio_worker=audio_worker, brain=brain,
+                          whatsapp=whatsapp, reminders=reminders,
+                          greeter=greeter, bus=bus)
+orchestrator.attach_meetings(meetings)
+tool_executor.meetings = meetings

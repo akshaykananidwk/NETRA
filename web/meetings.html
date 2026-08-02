@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>કૃષ્ણ નેત્ર — મીટિંગ</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Gujarati:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/app.js"></script>
+</head>
+<body class="gujarati">
+<div id="kn-header"></div>
+
+<main class="max-w-6xl mx-auto px-3 py-4 space-y-4" x-data="meetingsPage()" x-init="init()">
+
+  <div class="flex flex-wrap items-center gap-3">
+    <h1 class="font-bold text-lg">📋 મીટિંગ</h1>
+    <button class="kn-btn kn-btn-gold" x-show="!liveId" @click="startMeeting()">
+      ⏺ મીટિંગ ચાલુ કરો</button>
+    <button class="kn-btn kn-btn-red" x-show="liveId" x-cloak @click="endMeeting()">
+      ⏹ મીટિંગ પૂરી કરો</button>
+    <span x-show="liveId" x-cloak class="kn-chip animate-pulse"
+          style="background:#7f1d1d;color:#fca5a5">● રેકોર્ડિંગ ચાલુ</span>
+  </div>
+
+  <!-- live transcript while recording -->
+  <div class="kn-card p-4" x-show="liveId" x-cloak>
+    <h2 class="font-bold mb-2">🔴 લાઈવ ટ્રાન્સક્રિપ્ટ</h2>
+    <div class="space-y-1.5 text-sm max-h-72 overflow-y-auto" id="live-seg">
+      <template x-for="(seg,i) in liveSegments" :key="i">
+        <div><span class="font-semibold" style="color:#1E88A8"
+                   x-text="seg.speaker_label + ':'"></span>
+          <span x-text="' ' + seg.text"></span></div>
+      </template>
+      <div class="text-slate-500" x-show="!liveSegments.length">
+        બોલવાનું શરૂ થાય એટલે અહીં લખાતું જશે…</div>
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-3 gap-4">
+    <!-- list -->
+    <div class="space-y-2">
+      <template x-for="m in meetings" :key="m.id">
+        <div class="kn-card p-3 cursor-pointer" @click="open(m.id)"
+             :style="sel && sel.id===m.id ? 'border-color:#D4A017' : ''">
+          <div class="font-semibold text-sm" x-text="m.title"></div>
+          <div class="text-xs text-slate-400 flex gap-2 flex-wrap mt-1">
+            <span x-text="(m.started_at||'').slice(0,16)"></span>
+            <span class="kn-chip"
+                  :style="{recording:'background:#7f1d1d55;color:#fca5a5',
+                           processing:'background:#78350f55;color:#fbbf24',
+                           done:'background:#14532d55;color:#86efac',
+                           failed:'background:#7f1d1d55;color:#fca5a5'}[m.status]"
+                  x-text="{recording:'ચાલુ',processing:'સારાંશ બને છે',
+                           done:'તૈયાર',failed:'નિષ્ફળ'}[m.status] || m.status"></span>
+            <span x-text="m.segments + ' વાક્ય'"></span>
+          </div>
+        </div>
+      </template>
+      <div class="text-slate-500 text-sm p-3" x-show="!meetings.length">
+        હજી કોઈ મીટિંગ નથી</div>
+    </div>
+
+    <!-- detail -->
+    <div class="md:col-span-2 space-y-3" x-show="sel" x-cloak>
+      <div class="kn-card p-4 space-y-2">
+        <h2 class="font-bold" x-text="sel?.title"></h2>
+        <div class="text-xs text-slate-400"
+             x-text="(sel?.started_at||'').slice(0,16) + ' → ' + (sel?.ended_at||'ચાલુ').slice(0,16)"></div>
+        <div class="flex gap-1 flex-wrap" x-show="sel?.participants?.length">
+          <template x-for="p in sel?.participants || []" :key="p.name">
+            <span class="kn-chip" style="background:#1E88A833;color:#7dd3fc"
+                  x-text="p.name + (p.detected_by==='face' ? ' 👁️' : ' 🎙️')"></span>
+          </template>
+        </div>
+        <audio controls class="w-full mt-1" x-show="sel?.audio_path"
+               :src="sel?.audio_path ? '/media/' + sel.audio_path.replace('meetings/','meetings/') : ''"></audio>
+      </div>
+
+      <div class="kn-card p-4" x-show="sel?.summary">
+        <h3 class="font-bold mb-1" style="color:#D4A017">📝 સારાંશ</h3>
+        <p class="text-sm" x-text="sel?.summary"></p>
+        <div x-show="sel?.key_points?.length" class="mt-2">
+          <h4 class="text-sm font-semibold text-slate-300">મુખ્ય મુદ્દા</h4>
+          <ul class="text-sm list-disc list-inside text-slate-300">
+            <template x-for="k in sel?.key_points || []" :key="k">
+              <li x-text="k"></li></template>
+          </ul>
+        </div>
+        <div x-show="sel?.decisions?.length" class="mt-2">
+          <h4 class="text-sm font-semibold text-slate-300">નિર્ણયો</h4>
+          <ul class="text-sm list-disc list-inside text-slate-300">
+            <template x-for="k in sel?.decisions || []" :key="k">
+              <li x-text="k"></li></template>
+          </ul>
+        </div>
+      </div>
+
+      <div class="kn-card p-4">
+        <h3 class="font-bold mb-2">🗣️ ટ્રાન્સક્રિપ્ટ</h3>
+        <div class="space-y-1.5 text-sm max-h-96 overflow-y-auto">
+          <template x-for="(seg,i) in transcript" :key="i">
+            <div>
+              <span class="text-xs text-slate-500"
+                    x-text="fmtMs(seg.start_ms)"></span>
+              <span class="font-semibold" style="color:#1E88A8"
+                    x-text="' ' + seg.speaker_label + ':'"></span>
+              <span x-text="' ' + seg.text"></span>
+            </div>
+          </template>
+          <div class="text-slate-500" x-show="!transcript.length">
+            ટ્રાન્સક્રિપ્ટ ખાલી છે</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+function meetingsPage() {
+  return {
+    meetings: [], sel: null, transcript: [], liveId: null, liveSegments: [],
+    fmtMs(ms) {
+      const s = Math.floor((ms || 0) / 1000);
+      return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+    },
+    async init() {
+      await KN.init("meetings.html");
+      await this.refresh();
+      KN.on("meeting.started", d => { this.liveId = d.meeting_id;
+        this.liveSegments = []; this.refresh(); });
+      KN.on("meeting.segment", d => {
+        if (d.meeting_id === this.liveId) this.liveSegments.push(d); });
+      KN.on("meeting.ended", () => { this.liveId = null; this.refresh(); });
+      KN.on("meeting.summary", () => this.refresh());
+    },
+    async refresh() {
+      this.meetings = await KN.api("/api/meetings").catch(() => []);
+      const rec = this.meetings.find(m => m.status === "recording");
+      this.liveId = rec ? rec.id : this.liveId;
+      if (this.sel) this.open(this.sel.id);
+    },
+    async open(id) {
+      this.sel = await KN.api(`/api/meetings/${id}`).catch(() => null);
+      this.transcript = await KN.api(`/api/meetings/${id}/transcript`)
+        .catch(() => []);
+    },
+    async startMeeting() {
+      try {
+        const r = await KN.api("/api/meetings/start", { method: "POST",
+          json: {} });
+        KN.toast(r.reply, "ok");
+        this.refresh();
+      } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+    },
+    async endMeeting() {
+      try {
+        const r = await KN.api(`/api/meetings/${this.liveId}/end`,
+          { method: "POST" });
+        KN.toast(r.reply, "ok", 5000);
+        this.liveId = null;
+        this.refresh();
+      } catch (e) { KN.toast("ભૂલ: " + e.message, "error"); }
+    },
+  };
+}
+</script>
+</body>
+</html>
