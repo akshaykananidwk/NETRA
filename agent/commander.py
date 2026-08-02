@@ -86,10 +86,18 @@ class Commander:
         speaker = None
 
         if command is None:
-            # follow-up window: same speaker may continue without wake word
-            if time.time() < self._follow_up_until:
+            # follow-up window: same speaker may continue without wake word.
+            # Never during a meeting (normal conversation must not become
+            # commands), and never with a *different* identified voice.
+            meeting = (self.orch is not None
+                       and getattr(self.orch, "meeting_active", False))
+            if time.time() < self._follow_up_until and not meeting:
                 command = text
-                speaker = self._follow_up_speaker or None
+                stored = self._follow_up_speaker or None
+                if (stored and d.get("speaker_person_id")
+                        and d["speaker_person_id"] != stored.get("person_id")):
+                    stored = None       # someone else spoke — re-resolve
+                speaker = stored
             else:
                 return
         if speaker is None:
@@ -118,7 +126,14 @@ class Commander:
                 "tool_calls": [t["name"] for t in result["tool_calls"]],
             })
         if speak:
-            await self.greeter.say(result["reply"])
+            # the pause/mute confirmation must be audible even though the
+            # tool already flipped the state before we get here
+            force = any(t["name"] == "set_listening_state"
+                        for t in result["tool_calls"])
+            spoken = await self.greeter.say(result["reply"], force=force)
+            if not spoken and self.orch is not None:
+                # command DID run — never let the answer vanish silently
+                self.orch._log_activity("🤖", result["reply"][:80])
             self._open_follow_up(speaker)
         return result
 

@@ -187,6 +187,22 @@ def delete_person(person_id: int):
                 snap.unlink(missing_ok=True)
             s.delete(v)
         s.query(FaceEmbedding).filter(FaceEmbedding.person_id == person_id).delete()
+        # detach every remaining FK reference (no cascade in the schema) —
+        # otherwise the delete fails with a FOREIGN KEY error
+        from core.db import (Conversation, MeetingParticipant, Task,
+                             TranscriptSegment)
+        s.query(UnknownFace) \
+            .filter(UnknownFace.resolved_person_id == person_id) \
+            .update({"resolved_person_id": None})
+        s.query(Task).filter(Task.assignee_id == person_id) \
+            .update({"assignee_id": None})
+        s.query(Conversation).filter(Conversation.person_id == person_id) \
+            .update({"person_id": None})
+        s.query(TranscriptSegment) \
+            .filter(TranscriptSegment.person_id == person_id) \
+            .update({"person_id": None})
+        s.query(MeetingParticipant) \
+            .filter(MeetingParticipant.person_id == person_id).delete()
         s.delete(p)
         s.commit()
 

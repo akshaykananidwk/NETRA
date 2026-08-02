@@ -70,3 +70,38 @@ def test_camera_delete_with_visits_detaches_them(session):
     assert session.query(db.Camera).count() == 0
     kept = session.query(db.Visit).one()
     assert kept.camera_id is None
+
+
+def test_person_delete_with_task_and_unknown_refs(session):
+    p = db.Person(full_name="જવાનાર")
+    session.add(p)
+    session.flush()
+    u = db.UnknownFace(temp_uid="UNK-X", embedding=b"\x00" * 2048,
+                       first_seen=db.now_local(), last_seen=db.now_local(),
+                       resolved_person_id=p.id)
+    session.add(u)
+    session.add(db.Task(title="કામ", assignee_id=p.id))
+    session.add(db.Conversation(person_id=p.id, channel="voice",
+                                user_text="x", agent_text="y"))
+    session.commit()
+    # same detach sequence DELETE /api/persons/{id} runs
+    session.query(db.UnknownFace) \
+        .filter(db.UnknownFace.resolved_person_id == p.id) \
+        .update({"resolved_person_id": None})
+    session.query(db.Task).filter(db.Task.assignee_id == p.id) \
+        .update({"assignee_id": None})
+    session.query(db.Conversation).filter(db.Conversation.person_id == p.id) \
+        .update({"person_id": None})
+    session.delete(p)
+    session.commit()
+    assert session.query(db.Person).count() == 0
+    assert session.query(db.Task).one().assignee_id is None
+
+
+def test_mic_stays_active_while_paused():
+    from core.state import SystemState
+    st = SystemState()
+    st.set("paused")
+    assert st.mic_active          # voice resume must be possible
+    st.set("mute_mic")
+    assert not st.mic_active

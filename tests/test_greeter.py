@@ -42,7 +42,7 @@ def make_greeter(say_results=None):
     g.spoken = []
     results = say_results or {}
 
-    async def fake_say(text):
+    async def fake_say(text, force=False):
         g.spoken.append(text)
         return results.get("ok", True)
     g.say = fake_say
@@ -140,6 +140,7 @@ def test_unknown_is_asked_and_ask_count_increments(database):
 
     async def scenario():
         await g.on_unknown({"temp_uid": "UNK-20260801-0001", "camera_id": 1})
+        await asyncio.sleep(0.05)   # let _reply_timeout open the mic window
     asyncio.run(scenario())
     assert any("આપનું નામ" in t for t in g.spoken)
     assert g.awaiting["temp_uid"] == "UNK-20260801-0001"

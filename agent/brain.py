@@ -53,9 +53,11 @@ class AgentBrain:
                 if prov == "anthropic":
                     if not settings.anthropic_api_key:
                         continue
-                    reply, tool_calls = await self._run_anthropic(text, speaker)
+                    reply, tool_calls = await self._run_anthropic(
+                        text, speaker, channel)
                 else:
-                    reply, tool_calls = await self._run_ollama(text, speaker)
+                    reply, tool_calls = await self._run_ollama(
+                        text, speaker, channel)
                 provider = prov
                 set_health("llm", "ok", prov)
                 break
@@ -64,7 +66,10 @@ class AgentBrain:
                 set_health("llm", "degraded", f"{prov}: {str(e)[:150]}")
 
         if reply is None:
-            reply, tool_calls = self._run_rules(text, speaker)
+            # tool handlers do blocking work (HTTP, DB, cross-thread waits) —
+            # never run them on the event-loop thread
+            reply, tool_calls = await asyncio.to_thread(
+                self._run_rules, text, speaker)
             provider = "rules"
 
         latency_ms = int((time.time() - t0) * 1000)
@@ -86,9 +91,10 @@ class AgentBrain:
                 timeout=settings.llm_timeout_sec, max_retries=1)
         return self._anthropic
 
-    async def _run_anthropic(self, text: str, speaker: dict) -> tuple:
+    async def _run_anthropic(self, text: str, speaker: dict,
+                             channel: str = "voice") -> tuple:
         client = self._client()
-        key = self.memory.key_for(speaker, "voice")
+        key = self.memory.key_for(speaker, channel)
         system = [
             # frozen persona first — prompt-cached across calls
             {"type": "text", "text": PERSONA,
@@ -141,7 +147,8 @@ class AgentBrain:
                               "parameters": t["input_schema"]}}
                 for t in TOOLS]
 
-    async def _run_ollama(self, text: str, speaker: dict) -> tuple:
+    async def _run_ollama(self, text: str, speaker: dict,
+                          channel: str = "voice") -> tuple:
         # rules first: instant + reliable for the common commands, and it
         # spares the local model a round trip
         matched = match_intent(text)
@@ -152,7 +159,7 @@ class AgentBrain:
             return result, [{"name": name, "input": tool_input,
                              "result": result}]
 
-        key = self.memory.key_for(speaker, "voice")
+        key = self.memory.key_for(speaker, channel)
         messages = [{"role": "system",
                      "content": PERSONA + "\n\n"
                      + build_context(speaker, self.orchestrator)}]

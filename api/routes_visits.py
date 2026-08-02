@@ -20,7 +20,11 @@ def _query(s, date: Optional[str], person_id: Optional[int]):
           .outerjoin(UnknownFace, UnknownFace.id == Visit.unknown_id)
           .outerjoin(Camera, Camera.id == Visit.camera_id))
     if date:
-        day = datetime.strptime(date, "%Y-%m-%d")
+        try:
+            day = datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            from fastapi import HTTPException
+            raise HTTPException(422, f"ખોટી તારીખ: {date} (YYYY-MM-DD જોઈએ)")
         q = q.filter(Visit.first_seen >= day,
                      Visit.first_seen < day + timedelta(days=1))
     if person_id:

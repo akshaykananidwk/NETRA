@@ -44,6 +44,7 @@ class Orchestrator:
         self.last_admin_name: Optional[str] = None
         # (kind, id, camera_id) -> {"visit_id", "last_seen", "last_db_write", "name"}
         self._active: Dict[tuple, dict] = {}
+        self._bg_tasks: set = set()     # keep refs so tasks aren't GC'd
 
     def attach_greeter(self, greeter) -> None:
         self.greeter = greeter
@@ -322,12 +323,21 @@ class Orchestrator:
         # meeting transcript recording (agent stays silent; wake word still works)
         if self.meetings is not None and self.meetings.active:
             await self.meetings.on_transcript(d)
-        # name-capture flow takes priority over commands
+        # name-capture flow takes priority over commands — unless the wake
+        # word was spoken, which always wins (else "કૃષ્ણ મીટિંગ ચાલુ કર"
+        # would be saved as a visitor's name)
         if self.greeter and self.greeter.awaiting is not None:
-            await self.greeter.on_transcript(d)
-            return
+            from agent.commander import strip_wake_word
+            if strip_wake_word(d.get("text", "")) is None:
+                await self.greeter.on_transcript(d)
+                return
+            self.greeter.cancel_awaiting()
         if self.commander:
-            await self.commander.on_transcript(d)
+            # run as a task: an LLM call can take minutes (cold ollama) and
+            # must not freeze the whole event pipeline meanwhile
+            task = asyncio.create_task(self.commander.on_transcript(d))
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
 
     # ── UI helpers ────────────────────────────────────────────────────────
     def _log_activity(self, icon: str, text: str) -> None:

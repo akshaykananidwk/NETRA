@@ -214,6 +214,25 @@ class MeetingManager:
     # ── end + summarise ───────────────────────────────────────────────────
     async def end(self, meeting_id: Optional[int] = None,
                   auto: bool = False) -> str:
+        # an explicit id that is NOT the active meeting closes that row
+        # directly (e.g. one left in 'recording' after a crash) — it must
+        # never end a different, currently-running meeting
+        if meeting_id is not None and meeting_id != self.meeting_id:
+            def _close_stale():
+                with SessionLocal() as s:
+                    m = s.get(Meeting, meeting_id)
+                    if m is None:
+                        return False
+                    if m.status in ("recording", "processing"):
+                        m.ended_at = m.ended_at or now_local()
+                        m.status = "done"
+                        s.commit()
+                    return True
+            ok = await asyncio.to_thread(_close_stale)
+            if ok and self.orch:
+                await self.orch.hub.broadcast("meeting.ended",
+                                              {"meeting_id": meeting_id})
+            return "મીટિંગ બંધ કરી." if ok else "એ મીટિંગ મળી નથી."
         if not self.active:
             return "કોઈ મીટિંગ ચાલુ નથી."
         mid = self.meeting_id

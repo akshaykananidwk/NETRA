@@ -38,8 +38,10 @@ class Greeter:
         self._timeout_task: Optional[asyncio.Task] = None
 
     # ── speaking helper ───────────────────────────────────────────────────
-    async def say(self, text: str) -> bool:
-        if self.state.state in ("paused", "mute_speaker"):
+    async def say(self, text: str, force: bool = False) -> bool:
+        """force=True speaks even while paused/mute_speaker — used for the
+        state-change confirmations themselves ("સારું, હું થોભી જાઉં છું")."""
+        if not force and self.state.state in ("paused", "mute_speaker"):
             return False
         path = await self.tts.synth(text)
         if path is None:
@@ -57,7 +59,16 @@ class Greeter:
                                     self.tts.last_engine or "")
         except Exception:
             pass
-        return self.speaker.enqueue(text, path)
+        return self.speaker.enqueue(text, path, force=force)
+
+    def cancel_awaiting(self) -> None:
+        """Abort the name-capture window (e.g. the admin used the wake word)."""
+        self.awaiting = None
+        if self._timeout_task:
+            self._timeout_task.cancel()
+            self._timeout_task = None
+        if self.audio is not None:
+            self.audio.close_reply_window()
 
     # ── Flow B: known face ────────────────────────────────────────────────
     async def on_known(self, d: dict) -> None:
@@ -156,10 +167,7 @@ class Greeter:
         await asyncio.to_thread(_bump)
 
         self.awaiting = {"temp_uid": d["temp_uid"], "camera_id": d["camera_id"]}
-        if self.audio is not None:
-            self.audio.open_reply_window(settings.reply_timeout_sec + 4,
-                                         context={"purpose": "name_reply",
-                                                  "temp_uid": d["temp_uid"]})
+        # reply window opens inside _reply_timeout, after playback finishes
         if self._timeout_task:
             self._timeout_task.cancel()
         self._timeout_task = asyncio.create_task(
@@ -169,6 +177,17 @@ class Greeter:
 
     async def _reply_timeout(self, temp_uid: str) -> None:
         try:
+            # the welcome question is still PLAYING when this task starts —
+            # only begin counting once Krishna has finished speaking, else
+            # the visitor's answer arrives after the window closed
+            for _ in range(120):            # ≤ 60 s safety cap
+                if self.speaker is None or not self.speaker.is_speaking():
+                    break
+                await asyncio.sleep(0.5)
+            if self.audio is not None:
+                self.audio.open_reply_window(
+                    settings.reply_timeout_sec + 4,
+                    context={"purpose": "name_reply", "temp_uid": temp_uid})
             await asyncio.sleep(settings.reply_timeout_sec)
         except asyncio.CancelledError:
             return

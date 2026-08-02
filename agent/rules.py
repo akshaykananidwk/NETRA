@@ -32,7 +32,9 @@ def match_intent(text: str) -> Optional[Tuple[str, dict]]:
     # refreshments — "બે ચા મંગાવ", "કોફી લાવ"
     if re.search(r"(મંગાવ|મગાવ|લાવ|મોકલ|order)", t):
         items = []
-        if re.search(r"(ચા|chai|cha)\b|ચા", t):
+        # ચા must stand alone — not inside ચાર/ચાવી/ચાલુ
+        if re.search(r"(chai|cha)\b|(?<![઀-૿])ચા(?![઀-૿])",
+                     t):
             items.append({"item": "chai", "qty": _qty(t)})
         if re.search(r"(કોફી|coffee)", t):
             items.append({"item": "coffee", "qty": _qty(t)})

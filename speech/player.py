@@ -33,12 +33,15 @@ class Speaker(threading.Thread):
         self.detail = ""
 
     # ── public ────────────────────────────────────────────────────────────
-    def enqueue(self, text: str, audio_path: str) -> bool:
-        """Queue an utterance. Returns False if the speaker is known-dead."""
+    def enqueue(self, text: str, audio_path: str, force: bool = False) -> bool:
+        """Queue an utterance. Returns False if the speaker is known-dead.
+
+        force=True plays even in paused/mute_speaker state — reserved for
+        the state-change confirmations themselves."""
         if self._mixer_ok is False:
             return False
         try:
-            self._queue.put_nowait((text, audio_path))
+            self._queue.put_nowait((text, audio_path, force))
             return True
         except queue.Full:
             log.warning("speaker queue full — dropping utterance")
@@ -87,9 +90,9 @@ class Speaker(threading.Thread):
                 continue
             if item is None:
                 break
-            text, audio_path = item
+            text, audio_path, force = item
             state = self.state_provider() if self.state_provider else "active"
-            if state in ("paused", "mute_speaker"):
+            if not force and state in ("paused", "mute_speaker"):
                 log.info("speaker muted (%s) — skipped: %s", state, text)
                 continue
             if not self._init_mixer():

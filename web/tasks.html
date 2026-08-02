@@ -92,8 +92,9 @@ function tasksPage() {
     async init() {
       await KN.init("tasks.html");
       this.refresh();
-      ["task.created", "reminder.fired", "tool.executed"].forEach(t =>
+      ["reminder.fired", "agent.done.reply", "meeting.ended"].forEach(t =>
         KN.on(t, () => this.refresh()));
+      setInterval(() => this.refresh(), 15000);   // voice/meeting tasks
     },
     async refresh() {
       const q = new URLSearchParams({ range: this.range });

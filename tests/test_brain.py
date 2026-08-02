@@ -87,7 +87,7 @@ class FakeGreeter:
     def __init__(self):
         self.spoken = []
 
-    async def say(self, text):
+    async def say(self, text, force=False):
         self.spoken.append(text)
         return True
 
@@ -203,3 +203,33 @@ def test_ollama_tool_calling_loop(brain, monkeypatch):
     assert result["tool_calls"][0]["name"] == "order_refreshment"
     assert brain._wa.sent                # WhatsApp really fired
     assert "ચા" in result["reply"]
+
+
+def test_follow_up_blocked_during_meeting(brain):
+    import time
+    g = FakeGreeter()
+    c = Commander(brain, g, SystemState())
+    orch = FakeOrch()
+    orch.last_admin_seen = time.time()
+    orch.meeting_active = True
+    c.attach(orch)
+    c._open_follow_up({"person_id": 1, "name": "AK", "role": "admin"})
+    # normal meeting talk must NOT be executed as a command
+    asyncio.run(c.on_transcript({"text": "બે ચા મંગાવ"}))
+    assert g.spoken == []
+
+
+def test_follow_up_different_voice_reresolves(brain):
+    import time
+    g = FakeGreeter()
+    c = Commander(brain, g, SystemState())
+    orch = FakeOrch()
+    c.attach(orch)
+    c._open_follow_up({"person_id": 1, "name": "AK", "role": "admin"})
+    # a DIFFERENT identified voice must not inherit the admin identity
+    asyncio.run(c.on_transcript({
+        "text": "આજનું કલેક્શન કેટલું",
+        "speaker_person_id": 2, "speaker_name": "Visitor",
+        "speaker_is_admin": False}))
+    # get_collection_report is admin-only → the visitor gets the denial
+    assert any("માફ કરશો" in t or "સાહેબ" in t for t in g.spoken)

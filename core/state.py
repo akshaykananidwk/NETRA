@@ -39,7 +39,10 @@ class SystemState:
 
     @property
     def mic_active(self) -> bool:
-        return self.state not in ("paused", "mute_mic")
+        # paused keeps listening so "કૃષ્ણ ચાલુ થા" can wake the agent by
+        # voice (the commander ignores everything else while paused) —
+        # only mute_mic truly stops the microphone
+        return self.state != "mute_mic"
 
     @property
     def uptime_sec(self) -> int:

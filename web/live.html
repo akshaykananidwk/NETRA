@@ -107,6 +107,12 @@ function live() {
         this.log("🗣️", d.text);
       });
       KN.on("agent.speaking", d => this.log("🔊", d.text));
+      KN.on("agent.done.reply", d => {   // reply shows even if TTS failed
+        this.cmdReply = d.reply;
+        this.cmdMeta = (d.tool_calls || []).join(", ")
+          + (d.tool_calls?.length ? " · " : "") + (d.provider || "");
+        this.log("🤖", d.reply);
+      });
       const st = await KN.api("/api/system/status").catch(() => ({}));
       if (st.last_transcript) this.lastHeard = st.last_transcript.text;
       KN.on("face.recognized", d => this.log("🟢", `${d.name} ઓળખાયા (${Math.round((d.confidence||0)*100)}%)`));
