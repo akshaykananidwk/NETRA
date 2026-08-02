@@ -32,6 +32,13 @@ if exist "data\needs_pip_install" (
     ".venv\Scripts\python.exe" -m pip install -r requirements.txt
     if not errorlevel 1 del "data\needs_pip_install"
 )
+rem self-heal: a partially-installed huggingface_hub breaks face-recognition
+rem and Whisper with circular-import errors - detect and repair before boot
+".venv\Scripts\python.exe" -c "import huggingface_hub.utils" >nul 2>&1
+if errorlevel 1 (
+    echo  Broken package detected - auto-repairing huggingface_hub...
+    ".venv\Scripts\python.exe" -m pip install --force-reinstall --no-cache-dir huggingface_hub hf_xet
+)
 echo.
 echo  [%date% %time%]  Krishna Netra starting...
 ".venv\Scripts\python.exe" main.py
