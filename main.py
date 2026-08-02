@@ -41,6 +41,48 @@ _setup_logging()
 log = logging.getLogger("krishna.main")
 
 
+def _llm_health_loop() -> None:
+    """Probe the configured brain and show a clear Gujarati status/fix."""
+    import time as _time
+
+    import requests as _rq
+
+    from core.db import set_health
+
+    while True:
+        try:
+            local_first = (settings.llm_provider == "ollama"
+                           or not settings.anthropic_api_key)
+            if local_first:
+                try:
+                    r = _rq.get(settings.ollama_host.rstrip("/") + "/api/tags",
+                                timeout=5)
+                    r.raise_for_status()
+                    models = [m.get("name", "")
+                              for m in r.json().get("models", [])]
+                    base = settings.ollama_model.split(":")[0]
+                    if any(base in m for m in models):
+                        set_health("llm", "ok",
+                                   f"ollama સ્થાનિક: {settings.ollama_model} તૈયાર ✓")
+                    else:
+                        set_health("llm", "degraded",
+                                   "Ollama ચાલુ છે પણ model નથી — cmd માં "
+                                   f"ચલાવો: ollama pull {settings.ollama_model}")
+                except Exception:
+                    if settings.anthropic_api_key:
+                        set_health("llm", "ok", "anthropic (cloud)")
+                    else:
+                        set_health("llm", "down",
+                                   "LLM નથી: ollama.com પરથી Ollama install "
+                                   f"કરી 'ollama pull {settings.ollama_model}' "
+                                   "ચલાવો — સામાન્ય commands તો પણ ચાલશે")
+            else:
+                set_health("llm", "ok", "anthropic (cloud) તૈયાર")
+        except Exception:
+            log.exception("llm health check failed")
+        _time.sleep(120)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from core.db import apply_db_settings, init_db, seed_defaults, set_health
@@ -78,9 +120,8 @@ async def lifespan(app: FastAPI):
                      name="speaker-id-load").start()
     set_health("db", "ok", "")
     set_health("tts", "degraded", "no speech yet")
-    set_health("llm", "degraded",
-               "no command yet" if settings.anthropic_api_key
-               else "ANTHROPIC_API_KEY સેટ નથી — ollama/rules fallback")
+    threading.Thread(target=_llm_health_loop, daemon=True,
+                     name="llm-health").start()
     if not whatsapp.configured:
         set_health("whatsapp", "down", "WA_API_KEY સેટ નથી (.env)")
     log.info("KRISHNA NETRA up — http://%s:%s", settings.host, settings.port)
